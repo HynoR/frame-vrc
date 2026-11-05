@@ -17,8 +17,8 @@ Everything runs on the Frame, in Konsole or over SSH, as the normal user (`steam
 Pick one:
 
 ```sh
-# a) from the GitHub release (checks SHA256SUMS itself)
-curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash
+# a) from GitHub: installs the latest release (checks SHA256SUMS itself)
+curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 
 # b) from a downloaded frame-vrc-<version>.tar.gz (e.g. from Discord): check it, then install
 sha256sum -c --ignore-missing SHA256SUMS        # in the folder with the tarball and SHA256SUMS

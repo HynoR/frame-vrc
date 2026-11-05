@@ -31,7 +31,7 @@
 在 Frame 上（Konsole 或 SSH），用普通用户（不要 sudo）：
 
 ```sh
-curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash   # 安装 frame-vrc
+curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # 安装 frame-vrc
 ~/.local/bin/frame-vrc setup --resolution 720
 ```
 

@@ -16,8 +16,8 @@
 二选一：
 
 ```sh
-# a) 从 GitHub release 安装（会自己校验 SHA256SUMS）
-curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash
+# a) 从 GitHub 安装：装的是最新的 release（会自己校验 SHA256SUMS）
+curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 
 # b) 用下载好的 frame-vrc-<version>.tar.gz（比如 Discord 上的）：先校验再安装
 sha256sum -c --ignore-missing SHA256SUMS        # 在放着压缩包和 SHA256SUMS 的文件夹里

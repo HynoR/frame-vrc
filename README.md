@@ -35,7 +35,7 @@ rest plus zram in busy worlds. See [what we found](docs/history.md#findings).
 On the Frame, in Konsole or over SSH, as the normal user (never sudo):
 
 ```sh
-curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash   # installs frame-vrc
+curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # installs frame-vrc
 ~/.local/bin/frame-vrc setup --resolution 720
 ```
 

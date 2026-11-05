@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # One-line install or update of frame-vrc on the Steam Frame (Konsole or SSH, as user steamos; never sudo):
-#   curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 #   ... | FRAME_VRC_VERSION=0.1.0 bash   a given release instead of the latest
-# Downloads the release tarball + SHA256SUMS, checks the sum, and runs install.sh from a temporary folder.
+# Fetched from the repository (raw) so fixes here reach users at once; it installs only released versions: downloads
+# the latest (or given) release tarball + SHA256SUMS, checks the sum, and runs install.sh from a temporary folder.
 set -euo pipefail
 
 # everything sits in main, so a download cut off half way runs nothing

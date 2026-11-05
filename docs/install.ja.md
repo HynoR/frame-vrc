@@ -16,8 +16,8 @@
 どちらか一つ：
 
 ```sh
-# a) GitHub のリリースから（SHA256SUMS を自動で検証）
-curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash
+# a) GitHub から：最新リリースをインストール（SHA256SUMS を自動で検証）
+curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 
 # b) ダウンロードした frame-vrc-<version>.tar.gz から（Discord など）：検証してからインストール
 sha256sum -c --ignore-missing SHA256SUMS        # tarball と SHA256SUMS があるフォルダで

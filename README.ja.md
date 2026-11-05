@@ -34,7 +34,7 @@ EAC は回避していません。Valve の Proton EasyAntiCheat Runtime に入�
 Frame 上で（Konsole または SSH）、通常ユーザーで（sudo は使わない）：
 
 ```sh
-curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash   # frame-vrc をインストール
+curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # frame-vrc をインストール
 ~/.local/bin/frame-vrc setup --resolution 720
 ```
 
