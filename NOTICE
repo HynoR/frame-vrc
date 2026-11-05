@@ -1,0 +1,11 @@
+frame-vrc
+Licensed under the Apache License, Version 2.0 (LICENSE).
+
+lib/build-fex.sh and lib/install-fex-tool.sh are unmodified copies of fex-eac/ from steamac
+(FX Steam Launcher, https://github.com/StonkGuy/steamac), Copyright 2026 FX GAMES FZ LLC, Apache-2.0.
+
+frame-vrc downloads or builds FEX from https://github.com/StonkGuy/FEX (MIT, as FEX-Emu). The tool itself ships no FEX binaries,
+no game files and no Easy Anti-Cheat files: EAC comes from Valve's Proton EasyAntiCheat Runtime, installed by Steam.
+Prebuilt FEX packages (fex-*-steamframe-aarch64.tar.gz, made by `frame-vrc pack`) contain FEX binaries built from that
+source, with FEX's MIT license as LICENSE.FEX.
+Not affiliated with Valve, Epic Games, VRChat, FEX-Emu or FX GAMES.
