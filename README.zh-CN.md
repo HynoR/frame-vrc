@@ -20,7 +20,7 @@
 | FEX 版本（`frame-vrc switch …`） | VR | 桌面模式（`--no-vr`） |
 |---|---|---|
 | `valve`：Steam 自带的 FEX-Emu | EAC 失败（这就是要打补丁的原因；在 steamac 的 Mac 环境里看到的） | 同左 |
-| `eac`：steamac 补丁版 FEX | **能玩**：EAC 正常，能进世界；1440 约 20 fps，720 约 36 fps | 能玩 |
+| `eac`：steamac 补丁版 FEX | **能玩**：EAC 正常，能进世界；1440 约 20 fps，1056 约 29 fps，720 约 36 fps | 能玩 |
 | `thunk`：`eac` + Vulkan thunk | 第一帧交给 SteamVR 时崩溃（留给 FEX/Valve） | 能玩，CPU 少约 10% |
 
 瓶颈是内存：SteamVR、Steam 界面和追踪服务占掉 16 GB 里的约 7 GB，人多的世界里 VRChat 会把剩下的和 zram 都用满。
@@ -32,12 +32,12 @@
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # 安装 frame-vrc
-~/.local/bin/frame-vrc setup --resolution 720
+~/.local/bin/frame-vrc setup --resolution 1056
 ```
 
 `setup` 按顺序做完所有事：缺 FEX-Emu、Proton Experimental、EAC Runtime 就让 Steam 安装；检查 VRChat 是不是 Proton Experimental 下的 Windows 版；
 从最新的 release 下载并校验补丁版 FEX；换上（先备份 Valve 的文件）；设置 VRChat 的启动选项和渲染分辨率；最后运行 `doctor`。
-中途停下的话，它会告诉你要在 Steam 里做什么，做完再运行一次。不加 `--resolution` 就保留 SteamVR 原来的设置（1056 比 720 清楚）。
+中途停下的话，它会告诉你要在 Steam 里做什么，做完再运行一次。不加 `--resolution` 就保留 SteamVR 原来的设置；日常用 1056，720 只在最吃紧的时候用（约 36 fps，很糊）。
 然后在 VR 里启动 VRChat，第一次进世界约 3 分钟。
 
 其他方式（Discord 上下载的包、在头显上自己编译、完全手动）：[docs/install.zh-CN.md](docs/install.zh-CN.md)。

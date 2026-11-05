@@ -206,6 +206,39 @@ thunk 更大的价值在 VR：见下一节，原生层（注视点渲染）只�
   每个的大头都是约 135 MB 的 `FEXAllocator`（FEX 内部的 rpmalloc），这些进程本身几乎不干活。这是剩下最大的可省的地方，要先弄清楚 FEX 的分配器为什么每个进程都占这么多。
   （试过在游戏外用 FEX 跑一个 x86 的 `sleep` 来对比，Steam Runtime 的 `files` 目录直接当 rootfs 不行，没测成。）
 
+## 步骤 6：FEX 运行时选项（方案 A，2026-11-05 晚，eac，VR，720，home 世界单人，进世界后 5 分钟）
+
+先查了 Valve 怎么调 FEX（Frame 上的文件）：
+- Beat Saber 走 **Proton 11.0 (ARM64)**：Wine/DXVK/驱动原生，只有游戏的 x86 代码用 FEX（进程内 `libarm64ecfex`/`libwow64fex`）。
+  它的全局 FEX 配置（`Proton 11.0 (ARM64)/files/share/fex-emu/Config.json`）：`TSOEnabled 1`、`VectorTSOEnabled 0`、`MemcpySetTSOEnabled 0`、
+  `HalfBarrierTSOEnabled 1`、**`MaxInst 500`**、`Multiblock 1`、`X87ReducedPrecision 1`。按游戏的 `fex_application_profiles` 只有 Witcher 3 一条。
+- x86 路径（VRChat）的 `ConfigTemplate.json` 没设 MaxInst（默认 5000）。TSO/Multiblock 按游戏来自 appinfo 的 `STEAM_FEX_TSOENABLED`/`STEAM_FEX_MULTIBLOCK`；
+  **VRChat 运行时这两个都没有，app 配置是空的**，也就是全用 FEX 默认（TSO 全开、MaxInst 5000）。
+- FEX 配置层：环境变量层在 app 配置之后加载，所以 VRChat 启动选项里的 `FEX_<选项>=值` 会生效，只影响 VRChat。
+
+| 轮 | 设置 | 结果 | SteamVR fps | 每帧 CPU / GPU | PSS 峰值 | zram 峰值 | 可用内存最低 |
+|---|---|---|---|---|---|---|---|
+| base | 默认 | 稳定 | 38.8 | 17.6 / 17.5 ms | 6144 | 6395 | 842 |
+| a1 | `FEX_MAXINST=500` | 稳定，体感和 F 一样、不卡 | 33.9 | 20.3 / 15.8 ms | 5271 | 4334 | 1290 |
+| a3 | `FEX_TSOENABLED=0` | **进世界约 35 秒后崩溃**（Unity 写了崩溃转储；脚本 160 秒后才发现，因为崩溃处理进程还在） | （崩溃后的数据，不算） | | | | |
+| a2 | `FEX_HALFBARRIERTSOENABLED=0` | 稳定 | 34.7 | 20.2 / 12.6 ms | 5201 | 5082 | 1641 |
+
+结论：
+- **关 TSO 不可用**（VRChat 半分钟内崩溃）；**HalfBarrier 关掉没有收益**。只靠选项省不掉 TSO 的 CPU 开销。
+- MaxInst=500 稳定，帧数没提高；内存看起来比 base 好，但 a2 也差不多，而 base 是这批第一轮（zram 里还有之前的东西），先不归因。
+  反过来顺序再测一对（a1 在前、base 在后）确认。
+
+反顺序的一对（第二批，a1r 在前、baser 在后，同样设置）：
+
+| 轮 | 设置 | 结果 | SteamVR fps | 每帧 CPU / GPU | PSS 峰值 | zram 峰值 | 可用内存最低 |
+|---|---|---|---|---|---|---|---|
+| a1r（第 1 轮） | `FEX_MAXINST=500` | 稳定 | 33.9 | 20.1 / 18.9 ms | 5571 | 5182 | 1372 |
+| baser（第 2 轮） | 默认 | 稳定 | 36.4 | 18.9 / 15.3 ms | 5991 | 6926 | 959 |
+
+两种顺序结论一致：**MaxInst=500 游戏内存约 −0.65 GB（PSS 平均 5.4 对 6.1 GB）、zram 峰值约 −1.9 GB（4.8 对 6.7 GB）、可用内存最低约 +0.43 GB，
+帧数约 −10%（33.9 对约 37.6），每帧 CPU 多约 2 ms**（块更小，块之间跳转更多）。用户决定把它放进默认启动选项（负载高时内存才是瓶颈）。
+推荐分辨率改成 1056（720 只在极端情况用）。
+
 ## 下一步
 1. FEX 每个进程约 135 MB 的 `FEXAllocator`：先弄清是固定开销还是 rpmalloc 缓存（能在游戏外复现最好）；如果是一个小的、可逆的配置改动就试，否则记录下来交给 FEX 开发者。
 2. 人多的世界里测 DXVK 1 GB 显存上限有没有效果；VRChat 游戏内设置（隐藏 Poor/Very Poor 模型、模型下载/解压大小上限、最多显示模型数、粒子限制）由用户在 VR 里设，再对比。

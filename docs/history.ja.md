@@ -35,7 +35,8 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat Wi
   | E | D + 解像度 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
   | F | D + 解像度 720 | 36（SteamVR の統計） | 1.8 GB | 6.5 GB | 1.1 GB |
 
-- frame-vrc 0.5.2：新規インストール（Valve のバックアップがまだない）で `setup` と `switch` が無言で止まらなくなった。Steam の設定や SteamVR がないときの `doctor` と `resolution` も同様。クリーンインストールのテストで発見。
+- frame-vrc 0.5.2：デフォルトの起動オプションに `FEX_MAXINST=500`。推奨解像度を 1056 に。
+- frame-vrc 0.5.2（ほか）：新規インストール（Valve のバックアップがまだない）で `setup` と `switch` が無言で止まらなくなった。Steam の設定や SteamVR がないときの `doctor` と `resolution` も同様。クリーンインストールのテストで発見。
 - インストーラ（`get.sh`）はリリースではなくリポジトリから取得するようにし、修正に新しいリリースが不要に。インストールされるのは引き続き公開済みのバージョンのみ。
 - frame-vrc 0.5.1：ワンライナーのインストーラ（`get.sh`）が、インストール成功後にエラーで終了しなくなった。
 - frame-vrc 0.5.0：`setup` でインストール全体をコマンド一つで。`switch` は起動オプションが空のときも自動で設定。
@@ -51,6 +52,9 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat Wi
   27.7 ms 以内が必要）。CPU 時間の大半は FEX による x86 コードの変換。
 - **ゲームから見える VRAM：** Steam の Mesa による VRAM 上限はネイティブ側でしか効かず、`eac` では Unity に実際の 14683 MB が見える。
   DXVK の `dxgi.maxDeviceMemory` は効く。
+- **FEX のオプション（VRChat のみ、起動オプションの `FEX_*` で）：** Steam は VRChat に FEX の調整をしていない（FEX のデフォルトのまま）。TSO を切ると
+  約 35 秒でクラッシュ、HalfBarrier TSO を切っても効果なし。`MaxInst=500`（Valve が Proton ARM64 で使う値）でゲームのメモリ約 −0.65 GB、zram 約 −1.9 GB、
+  fps 約 −10%（順番を入れ替えても同じ）。デフォルトに採用。
 - **DXVK のコンパイルスレッド**は報告された CPU 数（16）に従う。4 にすると CPU が約 15% 減。
 - **フォービエイテッドレンダリング：** SteamOS の `VK_LAYER_VALVE_fdm_injection` は aarch64 版しかないため、エミュレーションで動くゲームには
   効かない。thunk なら読み込まれる。VR の thunk クラッシュが重要なのはこのため。

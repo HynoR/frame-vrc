@@ -24,7 +24,7 @@ them, and the settings here are tuned for VRChat.
 | FEX build (`frame-vrc switch …`) | VR | Desktop (`--no-vr`) |
 |---|---|---|
 | `valve`: Steam's FEX-Emu as shipped | EAC fails (the reason for the patch; seen on steamac's Mac setup) | same |
-| `eac`: steamac's patched FEX | **plays**: EAC OK, enters worlds; ~20 fps at 1440, ~36 fps at 720 | plays |
+| `eac`: steamac's patched FEX | **plays**: EAC OK, enters worlds; ~20 fps at 1440, ~29 fps at 1056, ~36 fps at 720 | plays |
 | `thunk`: `eac` + Vulkan thunk | crashes on the first frame handed to SteamVR (left to FEX/Valve) | plays, ~10% less CPU |
 
 Memory is the limit: SteamVR, Steam's UI and the tracking service take about 7 of the 16 GB, and VRChat fills the
@@ -36,14 +36,14 @@ On the Frame, in Konsole or over SSH, as the normal user (never sudo):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # installs frame-vrc
-~/.local/bin/frame-vrc setup --resolution 720
+~/.local/bin/frame-vrc setup --resolution 1056
 ```
 
 `setup` does everything in order: asks Steam to install FEX-Emu, Proton Experimental and the EAC Runtime if missing,
 checks that VRChat is the Windows build on Proton Experimental, downloads and checks the patched FEX from the latest
 release, swaps it in (Valve's files backed up), sets VRChat's launch options and the render resolution, and runs
 `doctor`. If it stops, it says what to do in Steam; do that and run it again. Leave out `--resolution` to keep
-SteamVR's setting (1056 is sharper than 720). Then start VRChat in VR; the first world join takes about 3 minutes.
+SteamVR's setting; 1056 is the everyday choice, 720 only for the toughest cases (about 36 fps, very blurry). Then start VRChat in VR; the first world join takes about 3 minutes.
 
 Other ways (a package from Discord, building on the headset, fully by hand): [docs/install.md](docs/install.md).
 

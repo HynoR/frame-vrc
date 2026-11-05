@@ -28,7 +28,7 @@ tar xzf frame-vrc-<version>.tar.gz && sh frame-vrc-<version>/install.sh
 
 ## 一条命令
 
-装好 frame-vrc 后，`frame-vrc setup --resolution 720` 会自己做完下面的第 1、3、4 部分（前提条件、最新 release 的 FEX 包、切换、启动选项、分辨率、doctor）。
+装好 frame-vrc 后，`frame-vrc setup --resolution 1056` 会自己做完下面的第 1、3、4 部分（前提条件、最新 release 的 FEX 包、切换、启动选项、分辨率、doctor）。
 要用别的包就给它地址或文件：`frame-vrc setup ~/Downloads/fex-<version>-steamframe-aarch64.tar.gz`。下面几部分是同样的步骤，一步一步来。
 
 ## 3. 获取补丁版 FEX
@@ -61,25 +61,26 @@ frame-vrc build              # 4 个线程约 5 分钟，在 ~/fex-eac-work 里�
    `sh install-fex-tool.sh`（`status` 看装的是哪个，`restore` 换回 Valve 的）。
 4. 把下面的启动选项粘贴到 VRChat > 属性 > 启动选项。
 5. 可选的分辨率：`/opt/steamvr/bin/linuxarm64/vrcmd --settings-int steam.app.438100.resolutionOverride`
-   （记下原值），然后 `--set-settings-int steam.app.438100.resolutionOverride 720`。
+   （记下原值），然后 `--set-settings-int steam.app.438100.resolutionOverride 1056`（最吃紧时用 720）。
 
 ## 4. 切换和设置
 
 ```sh
 frame-vrc switch eac             # 备份 Valve 的 FEX，装上补丁版
 frame-vrc launch-options set     # 通过 Steam 自己的 API 设置；`show` 会打印出来让你自己粘贴
-frame-vrc resolution 720         # 可选；1056 清楚一些；`reset` 恢复原值
+frame-vrc resolution 1056        # 可选；720 只在最吃紧时用；`reset` 恢复原值
 frame-vrc doctor
 ```
 
 frame-vrc 给 `eac` 版本设置的启动选项：
 
 ```text
-env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
+env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
 ```
 
 各部分的作用：`EAC_LAUNCHERDIR` / `PROTON_EAC_RUNTIME` 让 EAC 用 Valve 的运行时；`WINE_CPU_TOPOLOGY` 报 16 个 CPU（VRChat 按这个数决定线程池大小）；
-`DXVK_CONFIG` 报 1 GB 显存、用 4 个着色器编译线程；`tabtip.exe=d` 去掉 Wine 的触屏键盘（约 135 MB）；`PROTON_USE_XALIA=0` 和 `WINEDEBUG=-all` 关掉无障碍和日志的开销。
+`DXVK_CONFIG` 报 1 GB 显存、用 4 个着色器编译线程；`tabtip.exe=d` 去掉 Wine 的触屏键盘（约 135 MB）；`FEX_MAXINST=500` 让 FEX 按更小的块翻译，
+是 Valve 在 Proton ARM64 上自己用的值（游戏内存约 −0.65 GB、zram 约 −1.9 GB，帧数约 −10%）；`PROTON_USE_XALIA=0` 和 `WINEDEBUG=-all` 关掉无障碍和日志的开销。
 
 `thunk` 版本用 `frame-vrc switch thunk`，启动选项会自动改（Vulkan thunk 开关、驱动修正、`--no-vr`）：见 [thunk-build.zh-CN.md](thunk-build.zh-CN.md)。
 

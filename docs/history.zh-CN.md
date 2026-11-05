@@ -32,7 +32,8 @@
   | E | D + 分辨率 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
   | F | D + 分辨率 720 | 36（SteamVR 统计） | 1.8 GB | 6.5 GB | 1.1 GB |
 
-- frame-vrc 0.5.2：全新安装（还没有 Valve 备份）时 `setup` 和 `switch` 不再无声退出；没有 Steam 配置或 SteamVR 时 `doctor` 和 `resolution` 也不再无声退出。由干净安装测试发现。
+- frame-vrc 0.5.2：默认启动选项加入 `FEX_MAXINST=500`；推荐分辨率改为 1056。
+- frame-vrc 0.5.2（另外）：全新安装（还没有 Valve 备份）时 `setup` 和 `switch` 不再无声退出；没有 Steam 配置或 SteamVR 时 `doctor` 和 `resolution` 也不再无声退出。由干净安装测试发现。
 - 安装脚本（`get.sh`）改为从仓库直接获取，不再放在 release 里，修它不用重新发布；装的仍然只是已发布的版本。
 - frame-vrc 0.5.1：一行安装命令（`get.sh`）安装成功后不再报错退出。
 - frame-vrc 0.5.0：`setup` 一条命令完成整个安装；`switch` 在启动选项为空时也会自动填上。
@@ -44,6 +45,8 @@
 - **渲染分辨率是最大的杠杆。** SteamVR 设置界面最低 1440；`vrcmd`（和 `frame-vrc resolution`）可以更低；SteamVR 按 32 对齐（1080 → 1056）。
 - **CPU 和 GPU 都接近极限。** 1056 时每帧 CPU 约 20 ms、GPU 约 15 ms；SteamVR 按 36 或 24 fps 给游戏定步（36 需要 27.7 ms 内）。CPU 时间大多花在 FEX 翻译 x86 代码上。
 - **游戏看到的显存：** Steam 的 Mesa 显存上限只在原生侧生效；`eac` 下 Unity 看到真实的 14683 MB。DXVK 的 `dxgi.maxDeviceMemory` 有效。
+- **FEX 选项（只影响 VRChat，用启动选项里的 `FEX_*`）：** Steam 没给 VRChat 任何 FEX 调优（全是 FEX 默认值）。关 TSO 会让 VRChat 约 35 秒内崩溃；
+  关 HalfBarrier TSO 没有收益；`MaxInst=500`（Valve 在 Proton ARM64 的值）游戏内存约 −0.65 GB、zram 约 −1.9 GB，帧数约 −10%（两种顺序都一样），现在是默认。
 - **DXVK 编译线程**跟着报告的 CPU 数（16）；改成 4 CPU 少约 15%。
 - **注视点渲染：** SteamOS 的 `VK_LAYER_VALVE_fdm_injection` 只有 aarch64 版本，所以模拟运行的游戏用不上。开 thunk 时会加载，这就是 VR thunk 崩溃值得修的原因。
 - **内存都去哪了：** 只开 SteamVR 时 16 GB 里可用约 8.7 GB。Steam 界面（约 1.5 GB + zram 里 1.4 GB）、SteamVR 仪表盘（约 0.7 GB）、XRService（约 0.7 GB）

@@ -37,7 +37,8 @@ Raw notes: [research/](research/) (Chinese).
   | E | D + resolution 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
   | F | D + resolution 720 | 36 (SteamVR stats) | 1.8 GB | 6.5 GB | 1.1 GB |
 
-- frame-vrc 0.5.2: `setup` and `switch` no longer stop silently on a new install (no Valve backup yet); `doctor` and
+- frame-vrc 0.5.2: `FEX_MAXINST=500` in the default launch options; 1056 is the recommended resolution.
+- frame-vrc 0.5.2 (also): `setup` and `switch` no longer stop silently on a new install (no Valve backup yet); `doctor` and
   `resolution` no longer stop silently without Steam's config or SteamVR. Found by the clean-install test.
 - The installer (`get.sh`) is fetched from the repository instead of the release, so fixes to it need no new release;
   it still installs only released versions.
@@ -55,6 +56,9 @@ Raw notes: [research/](research/) (Chinese).
   at 36 or 24 fps (27.7 ms needed for 36). The CPU time is mostly FEX translating x86 code.
 - **VRAM the game sees:** Steam's Mesa VRAM cap only works on the native side; under `eac` Unity sees the real
   14683 MB. DXVK's `dxgi.maxDeviceMemory` does work.
+- **FEX options (VRChat only, through `FEX_*` launch options):** Steam gives VRChat no FEX tuning (FEX defaults). TSO off
+  crashes VRChat within ~35 s; HalfBarrier TSO off gains nothing; `MaxInst=500` (Valve's value for Proton ARM64) saves
+  ~0.65 GB of game memory and ~1.9 GB of zram for ~10% fewer fps (both run orders), so it is now the default.
 - **DXVK compiler threads** follow the reported CPU count (16); 4 cut CPU by ~15%.
 - **Foveated rendering:** SteamOS's `VK_LAYER_VALVE_fdm_injection` exists only for aarch64, so the emulated game gets
   none. With the thunk it loads; that is why the VR thunk crash matters.

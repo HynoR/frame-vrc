@@ -23,7 +23,7 @@ EAC は回避していません。Valve の Proton EasyAntiCheat Runtime に入�
 | FEX ビルド（`frame-vrc switch …`） | VR | デスクトップ（`--no-vr`） |
 |---|---|---|
 | `valve`：Steam 標準の FEX-Emu | EAC が失敗（パッチの理由。steamac の Mac 環境で確認） | 同左 |
-| `eac`：steamac のパッチ版 FEX | **遊べる**：EAC 正常、ワールドに入れる。1440 で約 20 fps、720 で約 36 fps | 遊べる |
+| `eac`：steamac のパッチ版 FEX | **遊べる**：EAC 正常、ワールドに入れる。1440 で約 20 fps、1056 で約 29 fps、720 で約 36 fps | 遊べる |
 | `thunk`：`eac` + Vulkan thunk | 最初のフレームを SteamVR に渡すときにクラッシュ（FEX/Valve に任せる） | 遊べる、CPU 約 10% 減 |
 
 ボトルネックはメモリです。SteamVR、Steam の UI、トラッキングサービスで 16 GB 中約 7 GB を使い、人の多いワールドでは VRChat が残りと zram を
@@ -35,13 +35,13 @@ Frame 上で（Konsole または SSH）、通常ユーザーで（sudo は使わ
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # frame-vrc をインストール
-~/.local/bin/frame-vrc setup --resolution 720
+~/.local/bin/frame-vrc setup --resolution 1056
 ```
 
 `setup` はすべてを順番に行います：FEX-Emu、Proton Experimental、EAC Runtime がなければ Steam にインストールを依頼し、VRChat が
 Proton Experimental 上の Windows 版か確認し、最新リリースからパッチ版 FEX をダウンロード・検証し、入れ替え（Valve のファイルはバックアップ）、
 VRChat の起動オプションと描画解像度を設定し、最後に `doctor` を実行します。途中で止まった場合は Steam でやるべきことが表示されるので、
-それをしてからもう一度実行してください。`--resolution` を付けなければ SteamVR の設定はそのまま（1056 は 720 より鮮明）。
+それをしてからもう一度実行してください。`--resolution` を付けなければ SteamVR の設定はそのまま。普段は 1056、720 は特に厳しいときだけ（約 36 fps、かなりぼやける）。
 その後 VR で VRChat を起動します。最初のワールド入場は約 3 分です。
 
 その他の方法（Discord で配布されたパッケージ、ヘッドセット上でのビルド、完全手動）：[docs/install.ja.md](docs/install.ja.md)。

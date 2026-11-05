@@ -30,7 +30,7 @@ shell or use `~/.local/bin/frame-vrc`.
 
 ## One command
 
-After installing frame-vrc, `frame-vrc setup --resolution 720` does sections 1, 3 and 4 below by itself (prerequisites,
+After installing frame-vrc, `frame-vrc setup --resolution 1056` does sections 1, 3 and 4 below by itself (prerequisites,
 the latest release's FEX package, switch, launch options, resolution, doctor). Give it a URL or file to use another
 package: `frame-vrc setup ~/Downloads/fex-<version>-steamframe-aarch64.tar.gz`. The sections below are the same steps
 one at a time.
@@ -67,26 +67,28 @@ Keep it on power and off your head.
    `sh install-fex-tool.sh` (`status` shows what is installed, `restore` puts Valve's files back).
 4. Paste the launch options below into VRChat > Properties > Launch Options.
 5. Optional resolution: `/opt/steamvr/bin/linuxarm64/vrcmd --settings-int steam.app.438100.resolutionOverride`
-   (note the old value), then `--set-settings-int steam.app.438100.resolutionOverride 720`.
+   (note the old value), then `--set-settings-int steam.app.438100.resolutionOverride 1056` (720 for the toughest cases).
 
 ## 4. Switch and configure
 
 ```sh
 frame-vrc switch eac             # backs up Valve's FEX, installs the patched one
 frame-vrc launch-options set     # Steam sets them through its own API; `show` prints them to paste instead
-frame-vrc resolution 720         # optional; 1056 is sharper; `reset` restores your old value
+frame-vrc resolution 1056        # optional; 720 only for the toughest cases; `reset` restores your old value
 frame-vrc doctor
 ```
 
 The launch options frame-vrc sets for the `eac` build:
 
 ```text
-env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
+env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
 ```
 
 What each part does: `EAC_LAUNCHERDIR` / `PROTON_EAC_RUNTIME` point EAC at Valve's runtime; `WINE_CPU_TOPOLOGY`
 reports 16 CPUs (VRChat sizes its thread pool from that); `DXVK_CONFIG` reports 1 GB of VRAM and uses 4 shader compiler
-threads; `tabtip.exe=d` drops Wine's touch keyboard (~135 MB); `PROTON_USE_XALIA=0` and `WINEDEBUG=-all` turn off
+threads; `tabtip.exe=d` drops Wine's touch keyboard (~135 MB); `FEX_MAXINST=500`
+makes FEX translate smaller blocks, Valve's own setting for Proton ARM64 (~0.65 GB less game memory, ~1.9 GB less zram,
+~10% fewer fps); `PROTON_USE_XALIA=0` and `WINEDEBUG=-all` turn off
 accessibility and logging work.
 
 For the `thunk` build, `frame-vrc switch thunk` changes the line by itself (Vulkan thunk switch, driver fix,

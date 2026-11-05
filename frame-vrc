@@ -121,8 +121,10 @@ launch_options() {
   fi
   # Memory and CPU, measured in VR on 2026-11-05 (docs/research/tuning-log.zh-CN.md): DXVK tells the game it has 1 GB
   # of VRAM (the headset's VRAM is its RAM) and compiles shaders on 4 threads instead of one per reported CPU (16);
-  # tabtip.exe, Wine's touch keyboard, is useless here and costs ~135 MB under FEX.
-  local lowmem="DXVK_CONFIG=\"dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4\" WINEDLLOVERRIDES=\"tabtip.exe=d\" "
+  # tabtip.exe, Wine's touch keyboard, is useless here and costs ~135 MB under FEX. FEX translates at most 500
+  # instructions per block, Valve's setting for Proton ARM64 (FEX's default is 5000): in VR ~0.65 GB less game memory
+  # and ~1.9 GB less zram for ~10% fewer fps. FEX_* in the launch options outrank Steam's per-app FEX config.
+  local lowmem="DXVK_CONFIG=\"dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4\" WINEDLLOVERRIDES=\"tabtip.exe=d\" FEX_MAXINST=500 "
   # $HOME stays literal: Steam runs the line through a shell.
   printf '%s' "env ${fexcfg}${lowmem}EAC_LAUNCHERDIR=\$HOME/.local/share/Steam/steamapps/compatdata/$appid/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME=\"\$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime\" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:$(IFS=,; echo "${ids[*]}") %command%$args"
 }
@@ -423,7 +425,7 @@ cmd_resolution() {
       [[ $(vr_get) == "$(cat "$prev")" ]] || die "SteamVR did not take the old value"
       rm -f "$prev"; echo "$name render resolution back to $(vr_get)" ;;
     *)
-      [[ $op =~ ^[0-9]+$ ]] && ((op >= 360 && op <= 4096)) || die "usage: frame-vrc resolution show|reset|N (360-4096; tested 720, 1080, 1440)"
+      [[ $op =~ ^[0-9]+$ ]] && ((op >= 360 && op <= 4096)) || die "usage: frame-vrc resolution show|reset|N (360-4096; tested 720, 1056, 1440; SteamVR rounds to multiples of 32)"
       [[ -f $prev ]] || { mkdir -p "$data"; echo "$cur" >"$prev"; }
       timeout 10 "$vrcmd" --set-settings-int "$key" "$op" >/dev/null
       [[ $(vr_get) == "$op" ]] || die "SteamVR did not take $op"
@@ -504,7 +506,7 @@ frame-vrc $VERSION: PC VRChat on the Steam Frame via the patched FEX
   frame-vrc switch status|valve|eac|thunk      swap Steam's FEX-Emu: Valve's / steamac's eac build (VR + desktop) /
                                                eac + Vulkan thunk (desktop only, see README)
   frame-vrc launch-options show|set|clear [game]
-  frame-vrc resolution show|N|reset [game]     render resolution in SteamVR, below the UI's 1440 (720 tested: ~36 fps)
+  frame-vrc resolution show|N|reset [game]     render resolution in SteamVR, below the UI's 1440 (1056: ~29 fps, 720: ~36 fps)
   frame-vrc bench [game]                       sample CPU/memory/temperature for one session, write a report
   frame-vrc uninstall [--purge]                undo everything (--purge also deletes the build and reports)
 games: vrchat (default)
