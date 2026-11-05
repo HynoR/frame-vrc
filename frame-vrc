@@ -3,7 +3,8 @@
 # (StonkGuy/FEX, eac-* tag). Other EAC games are not a goal and untested.
 # Runs as user steamos, never sudo, writes only under $HOME; every change has an undo. See README.md.
 set -euo pipefail
-VERSION=0.4.0
+VERSION=0.5.0
+repo=HynoR/frame-vrc
 here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 lib=$here/lib
 steam=$HOME/.local/share/Steam
@@ -135,6 +136,20 @@ opts_set() {
 
 ours() { [[ "$1" == *EAC_LAUNCHERDIR=* && "$1" == *PROTON_EAC_RUNTIME=* ]]; }
 
+# The game's compatibility tool in Steam: CompatToolMapping > "<appid>" > "name"
+compat_tool() {
+  awk -v id="\"$appid\"" '/"CompatToolMapping"/{m=1} m&&$1==id{a=1} a&&$1=="\"name\""{gsub(/"/,"",$2); print $2; exit}' \
+    "$steam/config/config.vdf" 2>/dev/null
+}
+
+# The eac package of the latest frame-vrc release (GitHub's API, no token needed).
+latest_fex_url() {
+  curl -fsSL "https://api.github.com/repos/$repo/releases/latest" | python3 -I -c '
+import json, sys
+print(next(a["browser_download_url"] for a in json.load(sys.stdin)["assets"]
+           if a["name"].endswith("-steamframe-aarch64.tar.gz") and "-thunk-" not in a["name"]))'
+}
+
 # ---- commands ------------------------------------------------------------------------------------------------
 # Steam installs what is missing; each steam://install opens Steam's own install prompt for the user to confirm.
 # The game's compatibility tool stays the user's choice in Steam (Properties > Compatibility); doctor checks it.
@@ -184,9 +199,7 @@ cmd_doctor() {
   if [[ -f "$gd/$name.exe" ]]; then ok "Windows build installed"
   elif [[ -e "$gd/$name.apk" ]]; then fail "the Android build is installed: set Properties > Compatibility > Proton Experimental"
   else fail "not installed"; fi
-  # CompatToolMapping > "<appid>" > "name"
-  local tool
-  tool=$(awk -v id="\"$appid\"" '/"CompatToolMapping"/{m=1} m&&$1==id{a=1} a&&$1=="\"name\""{gsub(/"/,"",$2); print $2; exit}' "$steam/config/config.vdf" 2>/dev/null)
+  local tool; tool=$(compat_tool)
   [[ $tool == proton_experimental ]] && ok "compatibility tool: $tool" || fail "compatibility tool is '${tool:-default}', not proton_experimental"
   local cur; cur=$(opts_get 2>/dev/null || true)
   if ours "$cur"; then ok "launch options set"; else fail "launch options not set: frame-vrc launch-options set"; fi
@@ -206,6 +219,32 @@ cmd_doctor() {
   [[ -n $(valve_backup) ]] && ok "Valve backup: $(basename "$(valve_backup)")" || ok "no Valve backup yet (made on the first switch)"
   local t; for t in clang cmake ninja ld.lld git python3; do command -v $t >/dev/null || fail "build tool missing: $t"; done
   ((bad == 0)) && echo "all set" || { echo "fix the FAIL lines above"; return 1; }
+}
+
+# One command for a new headset: what Steam must install, the patched FEX (a URL or file if given, else a build already
+# staged, else the latest release's package), the switch, the launch options, optionally the resolution, then doctor.
+cmd_setup() {
+  local res="" src=""
+  while (($#)); do
+    case $1 in --resolution) res=${2:?--resolution N}; shift 2 ;; *) src=$1; shift ;; esac
+  done
+  preset vrchat
+  local d
+  for d in FEX-Emu "Proton - Experimental" "Proton EasyAntiCheat Runtime"; do
+    [[ -d "$apps/common/$d" ]] || { cmd_install_deps; die "confirm the installs in Steam, then run frame-vrc setup again"; }
+  done
+  [[ -f "$apps/common/$name/$name.exe" && $(compat_tool) == proton_experimental ]] ||
+    die "in Steam set $name > Properties > Compatibility > Proton Experimental and let it download the Windows build, then run frame-vrc setup again"
+  if [[ -n $src ]]; then
+    cmd_fetch "$src"
+  elif [[ ! -d $work/stage ]]; then
+    local url; url=$(latest_fex_url) || die "no FEX package found in the latest $repo release: frame-vrc setup URL|FILE, or frame-vrc build"
+    cmd_fetch "$url"
+  fi
+  cmd_switch eac
+  cmd_launch_options set
+  [[ -z $res ]] || cmd_resolution "$res"
+  cmd_doctor
 }
 
 cmd_build() {
@@ -326,10 +365,11 @@ cmd_switch() {
       echo "now: Valve's build ($(describe "$fex")), identical to the backup" ;;
     *) die "usage: frame-vrc switch status|valve|eac|thunk" ;;
   esac
-  # Launch options set by frame-vrc follow the build (mod needs the Vulkan thunk flag, the others must not have it).
+  # Launch options follow the build (mod needs the Vulkan thunk flag, the others must not have it): frame-vrc's own,
+  # or none yet for a patched build. Options the user wrote are left alone.
   preset vrchat
   local cur; cur=$(opts_get 2>/dev/null || true)
-  if ours "$cur" && [[ "$cur" != "$(launch_options)" ]]; then
+  if { ours "$cur" || [[ -z $cur && $(fex_state) != valve ]]; } && [[ "$cur" != "$(launch_options)" ]]; then
     (opts_set "$(launch_options)") && echo "launch options updated for $(fex_state)" ||
       echo "frame-vrc: could not update the launch options; run frame-vrc launch-options set" >&2
   fi
@@ -449,6 +489,8 @@ cmd_uninstall() {
 usage() {
   cat <<EOF
 frame-vrc $VERSION: PC VRChat on the Steam Frame via the patched FEX
+  frame-vrc setup [--resolution N] [URL|FILE]  all of it in one go: Steam components, patched FEX (latest release
+                                               unless given), switch, launch options, resolution, doctor
   frame-vrc doctor [game]                      check everything, say what to fix
   frame-vrc install-deps [game]                ask Steam to install FEX-Emu, Proton Experimental, EAC Runtime
   frame-vrc build [--jobs N]                   build the patched FEX in $work (default 4 jobs)
@@ -468,6 +510,7 @@ EOF
 cmd=${1:-help}
 shift || true
 case $cmd in
+  setup) cmd_setup "$@" ;;
   doctor) cmd_doctor "$@" ;;
   install-deps) cmd_install_deps "$@" ;;
   build) cmd_build "$@" ;;

@@ -28,6 +28,13 @@ tar xzf frame-vrc-<version>.tar.gz && sh frame-vrc-<version>/install.sh
 It goes to `~/.local/lib/frame-vrc`, linked as `~/.local/bin/frame-vrc`. If `frame-vrc` is not found, open a new
 shell or use `~/.local/bin/frame-vrc`.
 
+## One command
+
+After installing frame-vrc, `frame-vrc setup --resolution 720` does sections 1, 3 and 4 below by itself (prerequisites,
+the latest release's FEX package, switch, launch options, resolution, doctor). Give it a URL or file to use another
+package: `frame-vrc setup ~/Downloads/fex-<version>-steamframe-aarch64.tar.gz`. The sections below are the same steps
+one at a time.
+
 ## 3. Get the patched FEX
 
 ### Method A: prebuilt package (recommended)

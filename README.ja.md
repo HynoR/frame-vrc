@@ -29,19 +29,20 @@ EAC は回避していません。Valve の Proton EasyAntiCheat Runtime に入�
 ボトルネックはメモリです。SteamVR、Steam の UI、トラッキングサービスで 16 GB 中約 7 GB を使い、人の多いワールドでは VRChat が残りと zram を
 使い切ります。[わかったこと](docs/history.ja.md#わかったこと)を参照。
 
-## クイックスタート（ビルド済み FEX）
+## クイックスタート
 
 Frame 上で（Konsole または SSH）、通常ユーザーで（sudo は使わない）：
 
 ```sh
 curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash   # frame-vrc をインストール
-frame-vrc install-deps                     # FEX-Emu、Proton Experimental、EAC Runtime のインストールを Steam に依頼（Steam で確認）
-# Steam：VRChat > プロパティ > 互換性 > Proton Experimental、Windows 版をダウンロードさせる
-frame-vrc fetch https://github.com/HynoR/frame-vrc/releases/download/<tag>/fex-<version>-steamframe-aarch64.tar.gz
-frame-vrc switch eac && frame-vrc launch-options set
-frame-vrc resolution 720                   # 任意：もう少し鮮明なら 1056、`reset` で元に戻す
-frame-vrc doctor                           # すべて "ok" なら VR で VRChat を起動（最初のワールド入場は約 3 分）
+~/.local/bin/frame-vrc setup --resolution 720
 ```
+
+`setup` はすべてを順番に行います：FEX-Emu、Proton Experimental、EAC Runtime がなければ Steam にインストールを依頼し、VRChat が
+Proton Experimental 上の Windows 版か確認し、最新リリースからパッチ版 FEX をダウンロード・検証し、入れ替え（Valve のファイルはバックアップ）、
+VRChat の起動オプションと描画解像度を設定し、最後に `doctor` を実行します。途中で止まった場合は Steam でやるべきことが表示されるので、
+それをしてからもう一度実行してください。`--resolution` を付けなければ SteamVR の設定はそのまま（1056 は 720 より鮮明）。
+その後 VR で VRChat を起動します。最初のワールド入場は約 3 分です。
 
 その他の方法（Discord で配布されたパッケージ、ヘッドセット上でのビルド、完全手動）：[docs/install.ja.md](docs/install.ja.md)。
 
@@ -58,6 +59,7 @@ frame-vrc doctor                           # すべて "ok" なら VR で VRChat
 ## コマンド
 
 ```text
+frame-vrc setup [--resolution N] [URL|FILE]  以下をまとめて実行（指定がなければ最新リリースの FEX）
 frame-vrc doctor [game]                    すべてを確認し、直すべき点を表示
 frame-vrc install-deps [game]              FEX-Emu、Proton Experimental、EAC Runtime のインストールを Steam に依頼
 frame-vrc build [--jobs N]                 ヘッドセット上でパッチ版 FEX をビルド（約 5 分、かなり熱くなる、100°C で停止）
@@ -79,6 +81,17 @@ frame-vrc uninstall [--purge]              すべて元に戻す
 
 `frame-vrc bench` のレポート（`~/.local/share/frame-vrc/bench/`）を **Benchmark report** の issue テンプレートか Discord で共有してください。
 同じワールド、同じ時間、一度に変えるのは一つだけにして、何を変えたかを書いてください。自動アップロードはしません。
+
+## 謝辞と関連プロジェクト
+
+- [steamac](https://github.com/StonkGuy/steamac) と [StonkGuy/FEX](https://github.com/StonkGuy/FEX)（FX GAMES）：Proton で EAC を動かせるようにしたパッチ版 FEX と、
+  このツールの出発点になった `fex-eac/` のビルド・インストールスクリプト。
+- [FEX-Emu](https://github.com/FEX-Emu/FEX)：ここにあるすべてが動いている x86 エミュレータ。
+- Valve：Proton、Proton EasyAntiCheat Runtime、SteamVR、Steam Frame 用の FEX-Emu ツール。
+- [DXVK](https://github.com/doitsujin/dxvk) と Mesa の Turnip ドライバ：Frame の GPU で Direct3D と Vulkan を動かす。
+- [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader)：起動オプションの設定に使っている Steam CEF の方法。
+- X の [@ji10me](https://x.com/ji10me) さん、Steam Frame での VRChat についての発信に感謝します：
+  https://x.com/ji10me/status/2117211791570919632 · https://x.com/ji10me/status/2116820842579628327
 
 ## 免責事項
 

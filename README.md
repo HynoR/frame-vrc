@@ -30,19 +30,20 @@ them, and the settings here are tuned for VRChat.
 Memory is the limit: SteamVR, Steam's UI and the tracking service take about 7 of the 16 GB, and VRChat fills the
 rest plus zram in busy worlds. See [what we found](docs/history.md#findings).
 
-## Quick start (prebuilt FEX)
+## Quick start
 
 On the Frame, in Konsole or over SSH, as the normal user (never sudo):
 
 ```sh
 curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash   # installs frame-vrc
-frame-vrc install-deps                     # Steam asks you to confirm FEX-Emu, Proton Experimental, EAC Runtime
-# Steam: VRChat > Properties > Compatibility > Proton Experimental, then let it download the Windows build
-frame-vrc fetch https://github.com/HynoR/frame-vrc/releases/download/<tag>/fex-<version>-steamframe-aarch64.tar.gz
-frame-vrc switch eac && frame-vrc launch-options set
-frame-vrc resolution 720                   # optional: 1056 for a sharper picture, `reset` for yours
-frame-vrc doctor                           # everything "ok"? Start VRChat in VR (first world join takes ~3 min)
+~/.local/bin/frame-vrc setup --resolution 720
 ```
+
+`setup` does everything in order: asks Steam to install FEX-Emu, Proton Experimental and the EAC Runtime if missing,
+checks that VRChat is the Windows build on Proton Experimental, downloads and checks the patched FEX from the latest
+release, swaps it in (Valve's files backed up), sets VRChat's launch options and the render resolution, and runs
+`doctor`. If it stops, it says what to do in Steam; do that and run it again. Leave out `--resolution` to keep
+SteamVR's setting (1056 is sharper than 720). Then start VRChat in VR; the first world join takes about 3 minutes.
 
 Other ways (a package from Discord, building on the headset, fully by hand): [docs/install.md](docs/install.md).
 
@@ -59,6 +60,7 @@ Other ways (a package from Discord, building on the headset, fully by hand): [do
 ## Commands
 
 ```text
+frame-vrc setup [--resolution N] [URL|FILE]  everything below in one go (latest release's FEX unless given)
 frame-vrc doctor [game]                    check everything, say what to fix
 frame-vrc install-deps [game]              ask Steam to install FEX-Emu, Proton Experimental, EAC Runtime
 frame-vrc build [--jobs N]                 build the patched FEX on the headset (~5 min, gets hot, stops at 100 C)
@@ -81,6 +83,17 @@ compatibility tool (x86 Proton) are affected.
 
 Share `frame-vrc bench` reports (`~/.local/share/frame-vrc/bench/`) with the **Benchmark report** issue template or on
 Discord: same world and length, one change at a time, and say what you changed. Nothing is uploaded automatically.
+
+## Thanks and related projects
+
+- [steamac](https://github.com/StonkGuy/steamac) and [StonkGuy/FEX](https://github.com/StonkGuy/FEX) (FX GAMES): the
+  patched FEX that makes EAC work under Proton, and the `fex-eac/` build and install scripts this tool started from.
+- [FEX-Emu](https://github.com/FEX-Emu/FEX): the x86 emulator everything here runs on.
+- Valve: Proton, the Proton EasyAntiCheat Runtime, SteamVR and the FEX-Emu tool for the Steam Frame.
+- [DXVK](https://github.com/doitsujin/dxvk) and Mesa's Turnip driver: Direct3D and Vulkan on the Frame's GPU.
+- [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader): the Steam CEF approach used to set launch options.
+- [@ji10me](https://x.com/ji10me) on X, for sharing their work on VRChat on the Steam Frame:
+  https://x.com/ji10me/status/2117211791570919632 · https://x.com/ji10me/status/2116820842579628327
 
 ## Disclaimer
 

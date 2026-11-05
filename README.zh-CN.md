@@ -26,19 +26,19 @@
 瓶颈是内存：SteamVR、Steam 界面和追踪服务占掉 16 GB 里的约 7 GB，人多的世界里 VRChat 会把剩下的和 zram 都用满。
 见[研究发现](docs/history.zh-CN.md#发现)。
 
-## 快速开始（用打包好的 FEX）
+## 快速开始
 
 在 Frame 上（Konsole 或 SSH），用普通用户（不要 sudo）：
 
 ```sh
 curl -fsSL https://github.com/HynoR/frame-vrc/releases/latest/download/get.sh | bash   # 安装 frame-vrc
-frame-vrc install-deps                     # 让 Steam 安装 FEX-Emu、Proton Experimental、EAC Runtime（在 Steam 里确认）
-# Steam：VRChat > 属性 > 兼容性 > Proton Experimental，然后让它下载 Windows 版
-frame-vrc fetch https://github.com/HynoR/frame-vrc/releases/download/<tag>/fex-<version>-steamframe-aarch64.tar.gz
-frame-vrc switch eac && frame-vrc launch-options set
-frame-vrc resolution 720                   # 可选：想清楚一点用 1056，`reset` 恢复原值
-frame-vrc doctor                           # 全部 "ok" 后在 VR 里启动 VRChat（第一次进世界约 3 分钟）
+~/.local/bin/frame-vrc setup --resolution 720
 ```
+
+`setup` 按顺序做完所有事：缺 FEX-Emu、Proton Experimental、EAC Runtime 就让 Steam 安装；检查 VRChat 是不是 Proton Experimental 下的 Windows 版；
+从最新的 release 下载并校验补丁版 FEX；换上（先备份 Valve 的文件）；设置 VRChat 的启动选项和渲染分辨率；最后运行 `doctor`。
+中途停下的话，它会告诉你要在 Steam 里做什么，做完再运行一次。不加 `--resolution` 就保留 SteamVR 原来的设置（1056 比 720 清楚）。
+然后在 VR 里启动 VRChat，第一次进世界约 3 分钟。
 
 其他方式（Discord 上下载的包、在头显上自己编译、完全手动）：[docs/install.zh-CN.md](docs/install.zh-CN.md)。
 
@@ -55,6 +55,7 @@ frame-vrc doctor                           # 全部 "ok" 后在 VR 里启动 VRC
 ## 命令
 
 ```text
+frame-vrc setup [--resolution N] [URL|FILE]  一次做完下面所有步骤（不指定就用最新 release 的 FEX）
 frame-vrc doctor [game]                    检查所有项目，告诉你要修什么
 frame-vrc install-deps [game]              让 Steam 安装 FEX-Emu、Proton Experimental、EAC Runtime
 frame-vrc build [--jobs N]                 在头显上编译补丁版 FEX（约 5 分钟，会很热，100°C 自动停）
@@ -76,6 +77,17 @@ frame-vrc uninstall [--purge]              全部撤销
 
 把 `frame-vrc bench` 的报告（`~/.local/share/frame-vrc/bench/`）用 **Benchmark report** issue 模板或在 Discord 上分享：
 同一个世界、同样时长、一次只改一项，写明改了什么。不会自动上传任何东西。
+
+## 鸣谢和相关项目
+
+- [steamac](https://github.com/StonkGuy/steamac) 和 [StonkGuy/FEX](https://github.com/StonkGuy/FEX)（FX GAMES）：让 EAC 能在 Proton 下运行的补丁版 FEX，
+  以及本工具起步时用的 `fex-eac/` 编译和安装脚本。
+- [FEX-Emu](https://github.com/FEX-Emu/FEX)：这里所有东西都跑在它上面的 x86 模拟器。
+- Valve：Proton、Proton EasyAntiCheat Runtime、SteamVR 和 Steam Frame 上的 FEX-Emu 工具。
+- [DXVK](https://github.com/doitsujin/dxvk) 和 Mesa 的 Turnip 驱动：在 Frame 的 GPU 上跑 Direct3D 和 Vulkan。
+- [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader)：设置启动选项用的 Steam CEF 方法。
+- X 上的 [@ji10me](https://x.com/ji10me)，感谢分享在 Steam Frame 上玩 VRChat 的成果：
+  https://x.com/ji10me/status/2117211791570919632 · https://x.com/ji10me/status/2116820842579628327
 
 ## 免责声明
 

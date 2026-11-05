@@ -26,6 +26,11 @@ tar xzf frame-vrc-<version>.tar.gz && sh frame-vrc-<version>/install.sh
 
 装到 `~/.local/lib/frame-vrc`，链接为 `~/.local/bin/frame-vrc`。如果提示找不到 `frame-vrc`，开一个新的终端或者用 `~/.local/bin/frame-vrc`。
 
+## 一条命令
+
+装好 frame-vrc 后，`frame-vrc setup --resolution 720` 会自己做完下面的第 1、3、4 部分（前提条件、最新 release 的 FEX 包、切换、启动选项、分辨率、doctor）。
+要用别的包就给它地址或文件：`frame-vrc setup ~/Downloads/fex-<version>-steamframe-aarch64.tar.gz`。下面几部分是同样的步骤，一步一步来。
+
 ## 3. 获取补丁版 FEX
 
 ### 方式 A：用打包好的（推荐）

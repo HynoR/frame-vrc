@@ -27,6 +27,12 @@ tar xzf frame-vrc-<version>.tar.gz && sh frame-vrc-<version>/install.sh
 `~/.local/lib/frame-vrc` に入り、`~/.local/bin/frame-vrc` にリンクされます。`frame-vrc` が見つからない場合は、新しいシェルを開くか
 `~/.local/bin/frame-vrc` を使ってください。
 
+## コマンド一つで
+
+frame-vrc をインストールしたら、`frame-vrc setup --resolution 720` が下の 1、3、4 をまとめて行います（前提条件、最新リリースの FEX パッケージ、
+切り替え、起動オプション、解像度、doctor）。別のパッケージを使うには URL かファイルを指定します：
+`frame-vrc setup ~/Downloads/fex-<version>-steamframe-aarch64.tar.gz`。以下は同じ手順を一つずつ行う方法です。
+
 ## 3. パッチ版 FEX を用意する
 
 ### 方法 A：ビルド済みパッケージ（おすすめ）
