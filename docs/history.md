@@ -38,6 +38,8 @@ Raw notes: [research/](research/) (Chinese).
   | F | D + resolution 720 | 36 (SteamVR stats) | 1.8 GB | 6.5 GB | 1.1 GB |
 
 - frame-vrc 0.5.2: `FEX_MAXINST=500` in the default launch options; 1056 is the recommended resolution.
+- frame-vrc 0.5.3: FEX's code cache only for VRChat and the EAC launcher (`FEX_APP_CONFIG`): Wine helpers ~640 MB less,
+  same fps (35.3 vs 33.9 in VR at 1056).
 - frame-vrc 0.5.2 (also): `setup` and `switch` no longer stop silently on a new install (no Valve backup yet); `doctor` and
   `resolution` no longer stop silently without Steam's config or SteamVR. Found by the clean-install test.
 - The installer (`get.sh`) is fetched from the repository instead of the release, so fixes to it need no new release;
@@ -64,15 +66,14 @@ Raw notes: [research/](research/) (Chinese).
   none. With the thunk it loads; that is why the VR thunk crash matters.
 - **Where memory goes:** with only SteamVR running ~8.7 of 16 GB are free. Steam's UI (~1.5 GB + 1.4 GB in zram),
   the SteamVR dashboard (~0.7 GB) and XRService (~0.7 GB) are needed in VR. In the game, every Wine helper process
-  carries ~135 MB of FEX allocator, ~1.2 GB in all.
+  carried ~135 MB, about half of it FEX's allocator. That part was each process's own copy of the FEX code cache index
+  (one per set of FEX settings, up to 124 MB); with the cache only for the game, 14 helpers went from 973 to 333 MB.
 - **Measuring:** reading a game's full `/proc/<pid>/smaps` makes it stutter; frame-vrc's sampler uses `smaps_rollup`.
   `vrcmd --stats` gives the game's frame counts and CPU/GPU time per frame.
 
 ## Open questions
 
-1. The ~135 MB of FEX allocator in every Wine helper process: fixed cost or allocator cache? A small, reversible fix
-   would be worth trying; otherwise report it to FEX.
-2. The 1 GB VRAM report and VRChat's avatar limits in busy worlds.
-3. How much a headset restart frees in Steam's UI processes.
-4. The VR thunk crash (upstream). An OpenVR-to-OpenXR layer (e.g. xrizer) in place of SteamVR's x86 vrclient might
+1. The 1 GB VRAM report and VRChat's avatar limits in busy worlds.
+2. How much a headset restart frees in Steam's UI processes.
+3. The VR thunk crash (upstream). An OpenVR-to-OpenXR layer (e.g. xrizer) in place of SteamVR's x86 vrclient might
    avoid it; untested, and EAC rules out changing game files.

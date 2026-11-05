@@ -3,7 +3,7 @@
 # (StonkGuy/FEX, eac-* tag). Other EAC games are not a goal and untested.
 # Runs as user steamos, never sudo, writes only under $HOME; every change has an undo. See README.md.
 set -euo pipefail
-VERSION=0.5.2
+VERSION=0.5.3
 repo=HynoR/frame-vrc
 here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 lib=$here/lib
@@ -118,6 +118,11 @@ launch_options() {
   if [[ $(fex_state) == mod ]]; then
     fexcfg="STEAM_COMPAT_FEX_CONFIG=\"TSOEnabled:1 Multiblock:1 ThunksDB_Vulkan:1\" FEX_HOSTENV=VK_DRIVER_FILES=\$HOME/${vk_json#"$HOME"/} "
     args=${desktop_args:+ $desktop_args}
+  else
+    # FEX's code cache only for the game and the EAC launcher: every Wine helper (services, winedevice, explorer, ...)
+    # otherwise loads its own copy of the cache index, ~50 MB each; in VR the 14 helpers went from 973 to 333 MB.
+    # fex-compat-tool skips its own app config when FEX_APP_CONFIG is set, so mod (which needs that one) leaves it out.
+    fexcfg="FEX_APP_CONFIG=\$HOME/${lib#"$HOME"/}/fex-vrchat.json "
   fi
   # Memory and CPU, measured in VR on 2026-11-05 (docs/research/tuning-log.zh-CN.md): DXVK tells the game it has 1 GB
   # of VRAM (the headset's VRAM is its RAM) and compiles shaders on 4 threads instead of one per reported CPU (16);

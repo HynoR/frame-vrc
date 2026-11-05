@@ -81,14 +81,17 @@ frame-vrc doctor
 The launch options frame-vrc sets for the `eac` build:
 
 ```text
-env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
+env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 FEX_APP_CONFIG=$HOME/.local/lib/frame-vrc/lib/fex-vrchat.json EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
 ```
 
 What each part does: `EAC_LAUNCHERDIR` / `PROTON_EAC_RUNTIME` point EAC at Valve's runtime; `WINE_CPU_TOPOLOGY`
 reports 16 CPUs (VRChat sizes its thread pool from that); `DXVK_CONFIG` reports 1 GB of VRAM and uses 4 shader compiler
 threads; `tabtip.exe=d` drops Wine's touch keyboard (~135 MB); `FEX_MAXINST=500`
 makes FEX translate smaller blocks, Valve's own setting for Proton ARM64 (~0.65 GB less game memory, ~1.9 GB less zram,
-~10% fewer fps); `PROTON_USE_XALIA=0` and `WINEDEBUG=-all` turn off
+~10% fewer fps); `FEX_APP_CONFIG` points at the tool's
+[lib/fex-vrchat.json](../lib/fex-vrchat.json), which keeps FEX's code cache for VRChat and the EAC launcher only
+(each Wine helper process otherwise loads its own ~50 MB copy of the cache index: ~640 MB in all; without the tool, copy
+that file somewhere and change the path); `PROTON_USE_XALIA=0` and `WINEDEBUG=-all` turn off
 accessibility and logging work.
 
 For the `thunk` build, `frame-vrc switch thunk` changes the line by itself (Vulkan thunk switch, driver fix,

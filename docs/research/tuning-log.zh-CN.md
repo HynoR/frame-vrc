@@ -247,3 +247,32 @@ thunk 更大的价值在 VR：见下一节，原生层（注视点渲染）只�
 
 frame-vrc 0.3.0 已经把 D 的三项设置放进默认启动选项，新增 `frame-vrc resolution show|N|reset`（经 vrcmd，第一次改时记下原值），
 `switch thunk` 自动加 `FEX_HOSTENV` 驱动修正和 `--no-vr`，`pack`/`fetch` 支持 thunk 版本，`fetch` 也能用本地文件（Discord 下载的）。
+
+## 步骤 7：FEX 代码缓存只给游戏（方案 C，2026-11-05 晚，eac，MaxInst=500，VR，1056）
+
+每个 Wine 辅助进程（services、plugplay、rpcss、winedevice×2、svchost、explorer、steam.exe……）各有约 70 MB 的 `FEXAllocator`。
+原因是 FEX 的 DiskCache：`IndexedDB::PopulateIndex` 把 `_idx.foz` 整个读进内存再建表，每个进程一份。
+VRChat 的缓存在 `shadercache/438100/fex-emu/DiskCache/`，每套 FEX 设置一份（实验跑多了有 16 个文件、3.1 GB，最大索引 124 MB）。
+
+不改 FEX：用自己的 `FEX_APP_CONFIG`（`lib/fex-vrchat.json`），默认关 DiskCache，`AppOverrides` 只给 `VRChat.exe` 和
+`start_protected_game.exe` 打开（Wine 进程的 ProgramName 是 exe 名）。设了 `FEX_APP_CONFIG` 后 fex-compat-tool 不再生成自己的 app 配置，
+VRChat 本来就没有 Valve 的 TSO/Multiblock 设置，所以没有损失；thunk 版本要靠那份配置开 thunk，所以不加。
+
+辅助进程（进世界后 60 秒，只读辅助进程的 smaps，不读 VRChat.exe）：
+
+| 轮 | 辅助进程数 | FEXAllocator 合计 | Pss+Swap 合计 | 进世界 | EAC |
+|---|---|---|---|---|---|
+| 默认 | 14 | 716 MB | 973 MB | 60 秒 | 301 / Session Begin Success |
+| C1 | 14 | 66 MB | 333 MB | 60 秒 | 301 / Session Begin Success |
+
+VR 5 分钟（同 a1 的方法）：
+
+| 轮 | fps | 重投影 | 每帧 CPU / GPU | PSS 峰值 | zram 峰值 | 可用内存最低 |
+|---|---|---|---|---|---|---|
+| a1 | 33.9 | 60% | 20.3 / 15.8 ms | 5271 | 4334 | 1290 |
+| a1r | 33.9 | 68% | 20.1 / 18.9 ms | 5571 | 5182 | 1372 |
+| c1（作废：中途进了加载页） | 48.8 | 38% | 11.0 / 9.7 ms | 5030 | 5497 | 1384 |
+| c1r | 35.3 | 58% | 20.0 / 15.5 ms | 4860 | 4457 | 1229 |
+
+结论：**辅助进程少约 640 MB，帧数不降，进世界时间不变，EAC 正常**。放进 frame-vrc 0.5.3 默认启动选项。
+旧实验留下的 DiskCache 文件（别的 FEX 设置的）不会再用到，可以删整个 `fex-emu` 文件夹让它重建。

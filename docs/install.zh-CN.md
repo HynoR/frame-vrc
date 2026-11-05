@@ -75,12 +75,14 @@ frame-vrc doctor
 frame-vrc 给 `eac` 版本设置的启动选项：
 
 ```text
-env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
+env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 FEX_APP_CONFIG=$HOME/.local/lib/frame-vrc/lib/fex-vrchat.json EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
 ```
 
 各部分的作用：`EAC_LAUNCHERDIR` / `PROTON_EAC_RUNTIME` 让 EAC 用 Valve 的运行时；`WINE_CPU_TOPOLOGY` 报 16 个 CPU（VRChat 按这个数决定线程池大小）；
 `DXVK_CONFIG` 报 1 GB 显存、用 4 个着色器编译线程；`tabtip.exe=d` 去掉 Wine 的触屏键盘（约 135 MB）；`FEX_MAXINST=500` 让 FEX 按更小的块翻译，
-是 Valve 在 Proton ARM64 上自己用的值（游戏内存约 −0.65 GB、zram 约 −1.9 GB，帧数约 −10%）；`PROTON_USE_XALIA=0` 和 `WINEDEBUG=-all` 关掉无障碍和日志的开销。
+是 Valve 在 Proton ARM64 上自己用的值（游戏内存约 −0.65 GB、zram 约 −1.9 GB，帧数约 −10%）；`FEX_APP_CONFIG` 指向工具自带的
+[lib/fex-vrchat.json](../lib/fex-vrchat.json)，只给 VRChat 和 EAC 启动器开 FEX 代码缓存（不然每个 Wine 辅助进程都各自载入一份约 50 MB 的缓存索引，合计约 640 MB；
+不用工具时把这个文件复制到别处并改路径）；`PROTON_USE_XALIA=0` 和 `WINEDEBUG=-all` 关掉无障碍和日志的开销。
 
 `thunk` 版本用 `frame-vrc switch thunk`，启动选项会自动改（Vulkan thunk 开关、驱动修正、`--no-vr`）：见 [thunk-build.zh-CN.md](thunk-build.zh-CN.md)。
 

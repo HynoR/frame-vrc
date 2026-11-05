@@ -1,0 +1,8 @@
+{
+  "Config": { "DiskCache": "0" },
+  "ThunksDB": {},
+  "AppOverrides": {
+    "VRChat.exe": { "DiskCache": "1" },
+    "start_protected_game.exe": { "DiskCache": "1" }
+  }
+}

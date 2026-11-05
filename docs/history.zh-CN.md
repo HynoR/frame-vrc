@@ -33,6 +33,7 @@
   | F | D + 分辨率 720 | 36（SteamVR 统计） | 1.8 GB | 6.5 GB | 1.1 GB |
 
 - frame-vrc 0.5.2：默认启动选项加入 `FEX_MAXINST=500`；推荐分辨率改为 1056。
+- frame-vrc 0.5.3：FEX 代码缓存只给 VRChat 和 EAC 启动器（`FEX_APP_CONFIG`）：Wine 辅助进程少约 640 MB，帧数不变（VR、1056 下 35.3 对 33.9）。
 - frame-vrc 0.5.2（另外）：全新安装（还没有 Valve 备份）时 `setup` 和 `switch` 不再无声退出；没有 Steam 配置或 SteamVR 时 `doctor` 和 `resolution` 也不再无声退出。由干净安装测试发现。
 - 安装脚本（`get.sh`）改为从仓库直接获取，不再放在 release 里，修它不用重新发布；装的仍然只是已发布的版本。
 - frame-vrc 0.5.1：一行安装命令（`get.sh`）安装成功后不再报错退出。
@@ -50,12 +51,12 @@
 - **DXVK 编译线程**跟着报告的 CPU 数（16）；改成 4 CPU 少约 15%。
 - **注视点渲染：** SteamOS 的 `VK_LAYER_VALVE_fdm_injection` 只有 aarch64 版本，所以模拟运行的游戏用不上。开 thunk 时会加载，这就是 VR thunk 崩溃值得修的原因。
 - **内存都去哪了：** 只开 SteamVR 时 16 GB 里可用约 8.7 GB。Steam 界面（约 1.5 GB + zram 里 1.4 GB）、SteamVR 仪表盘（约 0.7 GB）、XRService（约 0.7 GB）
-  在 VR 里都要用。游戏里每个 Wine 辅助进程都带着约 135 MB 的 FEX 分配器，合计约 1.2 GB。
+  在 VR 里都要用。游戏里每个 Wine 辅助进程约占 135 MB，其中一半左右是 FEX 分配器。
+  那部分是每个进程各自载入的 FEX 代码缓存索引（每套 FEX 设置一份，最大 124 MB）；只给游戏开缓存后，14 个辅助进程从 973 MB 降到 333 MB。
 - **测量注意：** 读游戏完整的 `/proc/<pid>/smaps` 会让它卡顿；frame-vrc 的采样用 `smaps_rollup`。`vrcmd --stats` 能拿到游戏的帧数和每帧 CPU/GPU 时间。
 
 ## 待解决
 
-1. 每个 Wine 辅助进程约 135 MB 的 FEX 分配器：是固定开销还是分配器缓存？如果有小的、可逆的修改值得一试；否则报给 FEX。
-2. 人多的世界里 1 GB 显存报告和 VRChat 模型限制的效果。
-3. 重启头显能让 Steam 界面的进程少占多少。
-4. VR thunk 崩溃（上游）。用 OpenVR 转 OpenXR 的层（比如 xrizer）替换 SteamVR 的 x86 vrclient 也许能绕开；没测过，而且因为 EAC 不能改游戏文件。
+1. 人多的世界里 1 GB 显存报告和 VRChat 模型限制的效果。
+2. 重启头显能让 Steam 界面的进程少占多少。
+3. VR thunk 崩溃（上游）。用 OpenVR 转 OpenXR 的层（比如 xrizer）替换 SteamVR 的 x86 vrclient 也许能绕开；没测过，而且因为 EAC 不能改游戏文件。

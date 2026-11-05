@@ -79,13 +79,15 @@ frame-vrc doctor
 `eac` ビルドで frame-vrc が設定する起動オプション：
 
 ```text
-env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
+env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 FEX_APP_CONFIG=$HOME/.local/lib/frame-vrc/lib/fex-vrchat.json EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
 ```
 
 各部分の役割：`EAC_LAUNCHERDIR` / `PROTON_EAC_RUNTIME` は EAC に Valve のランタイムを使わせる。`WINE_CPU_TOPOLOGY` は CPU を 16 個と報告
 （VRChat はこの数でスレッドプールの大きさを決める）。`DXVK_CONFIG` は VRAM を 1 GB と報告し、シェーダーのコンパイルを 4 スレッドにする。
 `tabtip.exe=d` は Wine のタッチキーボードを無効化（約 135 MB）。
-`FEX_MAXINST=500` は FEX の変換ブロックを小さくする、Valve が Proton ARM64 で使っている値（ゲームのメモリ約 −0.65 GB、zram 約 −1.9 GB、fps 約 −10%）。`PROTON_USE_XALIA=0` と `WINEDEBUG=-all` はアクセシビリティとログの処理を止める。
+`FEX_MAXINST=500` は FEX の変換ブロックを小さくする、Valve が Proton ARM64 で使っている値（ゲームのメモリ約 −0.65 GB、zram 約 −1.9 GB、fps 約 −10%）。`FEX_APP_CONFIG` はツール付属の
+[lib/fex-vrchat.json](../lib/fex-vrchat.json) を指し、FEX のコードキャッシュを VRChat と EAC ランチャーだけで使う（使わないと Wine の補助プロセスがそれぞれ
+約 50 MB のキャッシュ索引を読み込み、合計約 640 MB。ツールなしの場合はこのファイルを別の場所にコピーしてパスを変える）。`PROTON_USE_XALIA=0` と `WINEDEBUG=-all` はアクセシビリティとログの処理を止める。
 
 `thunk` ビルドでは `frame-vrc switch thunk` が起動オプションを自動で変えます（Vulkan thunk のスイッチ、ドライバ修正、`--no-vr`）：
 [thunk-build.ja.md](thunk-build.ja.md) を参照。

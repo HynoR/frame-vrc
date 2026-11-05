@@ -36,7 +36,7 @@ Valve build is backed up, the old backup kept as `valve-backup.old-<date>`).
 
 | What | Where | Remove |
 |---|---|---|
-| FEX code cache (~0.8 GB after a few sessions; makes later starts fast) | `~/.local/share/Steam/steamapps/shadercache/438100/fex-emu/` | delete the folder; it is rebuilt |
+| FEX code cache (~0.8 GB after a few sessions, one file set per FEX setting; makes later starts fast) | `~/.local/share/Steam/steamapps/shadercache/438100/fex-emu/` | delete the folder; it is rebuilt |
 | VRChat's Wine prefix (EAC files, game settings, caches) | `~/.local/share/Steam/steamapps/compatdata/438100/` | uninstalling VRChat in Steam |
 
 ## Not touched

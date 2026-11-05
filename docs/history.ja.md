@@ -36,6 +36,7 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat Wi
   | F | D + 解像度 720 | 36（SteamVR の統計） | 1.8 GB | 6.5 GB | 1.1 GB |
 
 - frame-vrc 0.5.2：デフォルトの起動オプションに `FEX_MAXINST=500`。推奨解像度を 1056 に。
+- frame-vrc 0.5.3：FEX のコードキャッシュを VRChat と EAC ランチャーだけに（`FEX_APP_CONFIG`）。Wine の補助プロセスが約 640 MB 減り、fps は同じ（VR、1056 で 35.3 対 33.9）。
 - frame-vrc 0.5.2（ほか）：新規インストール（Valve のバックアップがまだない）で `setup` と `switch` が無言で止まらなくなった。Steam の設定や SteamVR がないときの `doctor` と `resolution` も同様。クリーンインストールのテストで発見。
 - インストーラ（`get.sh`）はリリースではなくリポジトリから取得するようにし、修正に新しいリリースが不要に。インストールされるのは引き続き公開済みのバージョンのみ。
 - frame-vrc 0.5.1：ワンライナーのインストーラ（`get.sh`）が、インストール成功後にエラーで終了しなくなった。
@@ -59,15 +60,14 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat Wi
 - **フォービエイテッドレンダリング：** SteamOS の `VK_LAYER_VALVE_fdm_injection` は aarch64 版しかないため、エミュレーションで動くゲームには
   効かない。thunk なら読み込まれる。VR の thunk クラッシュが重要なのはこのため。
 - **メモリの使い道：** SteamVR だけの状態で 16 GB 中約 8.7 GB が空き。Steam の UI（約 1.5 GB + zram に 1.4 GB）、SteamVR ダッシュボード
-  （約 0.7 GB）、XRService（約 0.7 GB）は VR で必要。ゲーム中は Wine の補助プロセスがそれぞれ約 135 MB の FEX アロケータを抱え、合計約 1.2 GB。
+  （約 0.7 GB）、XRService（約 0.7 GB）は VR で必要。ゲーム中は Wine の補助プロセスがそれぞれ約 135 MB、その半分ほどが FEX のアロケータ。
+  中身は各プロセスが読み込む FEX コードキャッシュの索引（FEX の設定ごとに 1 つ、最大 124 MB）。キャッシュをゲームだけにすると 14 個の補助プロセスが 973 MB から 333 MB に。
 - **測定の注意：** ゲームの `/proc/<pid>/smaps` 全体を読むとカクつく。frame-vrc のサンプラーは `smaps_rollup` を使う。
   `vrcmd --stats` でゲームのフレーム数と 1 フレームあたりの CPU/GPU 時間がわかる。
 
 ## 未解決の課題
 
-1. Wine の補助プロセスごとの約 135 MB の FEX アロケータ：固定コストかアロケータのキャッシュか。小さく元に戻せる修正があれば試す価値あり。
-   なければ FEX に報告。
-2. 人の多いワールドでの 1 GB VRAM 報告と VRChat のアバター制限の効果。
-3. ヘッドセットの再起動で Steam の UI プロセスがどれだけ減るか。
-4. VR の thunk クラッシュ（上流）。SteamVR の x86 vrclient の代わりに OpenVR→OpenXR の変換レイヤー（xrizer など）を使えば回避できるかも
+1. 人の多いワールドでの 1 GB VRAM 報告と VRChat のアバター制限の効果。
+2. ヘッドセットの再起動で Steam の UI プロセスがどれだけ減るか。
+3. VR の thunk クラッシュ（上流）。SteamVR の x86 vrclient の代わりに OpenVR→OpenXR の変換レイヤー（xrizer など）を使えば回避できるかも
    しれない。未検証。EAC があるのでゲームファイルは変更できない。
