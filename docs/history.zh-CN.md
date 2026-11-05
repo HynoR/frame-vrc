@@ -33,7 +33,7 @@
   | F | D + 分辨率 720 | 36（SteamVR 统计） | 1.8 GB | 6.5 GB | 1.1 GB |
 
 - frame-vrc 0.5.2：默认启动选项加入 `FEX_MAXINST=500`；推荐分辨率改为 1056。
-- frame-vrc 0.5.3：FEX 代码缓存只给 VRChat 和 EAC 启动器（`FEX_APP_CONFIG`）：Wine 辅助进程少约 640 MB，帧数不变（VR、1056 下 35.3 对 33.9）。
+- frame-vrc 0.5.3：FEX 代码缓存只给 VRChat 和 EAC 启动器（`FEX_APP_CONFIG`）：Wine 辅助进程少约 640 MB，帧数没有下降（1056 下 35.3，只开 MaxInst=500 时 720 下 33.9）。
 - frame-vrc 0.5.2（另外）：全新安装（还没有 Valve 备份）时 `setup` 和 `switch` 不再无声退出；没有 Steam 配置或 SteamVR 时 `doctor` 和 `resolution` 也不再无声退出。由干净安装测试发现。
 - 安装脚本（`get.sh`）改为从仓库直接获取，不再放在 release 里，修它不用重新发布；装的仍然只是已发布的版本。
 - frame-vrc 0.5.1：一行安装命令（`get.sh`）安装成功后不再报错退出。

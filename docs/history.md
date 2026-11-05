@@ -39,7 +39,7 @@ Raw notes: [research/](research/) (Chinese).
 
 - frame-vrc 0.5.2: `FEX_MAXINST=500` in the default launch options; 1056 is the recommended resolution.
 - frame-vrc 0.5.3: FEX's code cache only for VRChat and the EAC launcher (`FEX_APP_CONFIG`): Wine helpers ~640 MB less,
-  same fps (35.3 vs 33.9 in VR at 1056).
+  no fps loss (35.3 fps at 1056, vs 33.9 for MaxInst=500 alone at 720).
 - frame-vrc 0.5.2 (also): `setup` and `switch` no longer stop silently on a new install (no Valve backup yet); `doctor` and
   `resolution` no longer stop silently without Steam's config or SteamVR. Found by the clean-install test.
 - The installer (`get.sh`) is fetched from the repository instead of the release, so fixes to it need no new release;

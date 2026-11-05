@@ -36,7 +36,7 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat Wi
   | F | D + 解像度 720 | 36（SteamVR の統計） | 1.8 GB | 6.5 GB | 1.1 GB |
 
 - frame-vrc 0.5.2：デフォルトの起動オプションに `FEX_MAXINST=500`。推奨解像度を 1056 に。
-- frame-vrc 0.5.3：FEX のコードキャッシュを VRChat と EAC ランチャーだけに（`FEX_APP_CONFIG`）。Wine の補助プロセスが約 640 MB 減り、fps は同じ（VR、1056 で 35.3 対 33.9）。
+- frame-vrc 0.5.3：FEX のコードキャッシュを VRChat と EAC ランチャーだけに（`FEX_APP_CONFIG`）。Wine の補助プロセスが約 640 MB 減り、fps は下がらない（1056 で 35.3、MaxInst=500 だけのときは 720 で 33.9）。
 - frame-vrc 0.5.2（ほか）：新規インストール（Valve のバックアップがまだない）で `setup` と `switch` が無言で止まらなくなった。Steam の設定や SteamVR がないときの `doctor` と `resolution` も同様。クリーンインストールのテストで発見。
 - インストーラ（`get.sh`）はリリースではなくリポジトリから取得するようにし、修正に新しいリリースが不要に。インストールされるのは引き続き公開済みのバージョンのみ。
 - frame-vrc 0.5.1：ワンライナーのインストーラ（`get.sh`）が、インストール成功後にエラーで終了しなくなった。
