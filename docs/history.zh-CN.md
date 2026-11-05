@@ -32,6 +32,7 @@
   | E | D + 分辨率 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
   | F | D + 分辨率 720 | 36（SteamVR 统计） | 1.8 GB | 6.5 GB | 1.1 GB |
 
+- frame-vrc 0.5.1：一行安装命令（`get.sh`）安装成功后不再报错退出。
 - frame-vrc 0.5.0：`setup` 一条命令完成整个安装；`switch` 在启动选项为空时也会自动填上。
 - 从 frame-eac 改名为 **frame-vrc**（0.4.0）：重点是玩 PC 版 VRChat，而不是泛泛地运行 EAC 游戏。
 - frame-vrc 0.3.0：D 的设置成为默认、`resolution` 命令、基准报告带 SteamVR 帧数、thunk 版本打包、`fetch` 支持本地文件、三语文档。

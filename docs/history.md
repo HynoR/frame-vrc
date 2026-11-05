@@ -37,6 +37,7 @@ Raw notes: [research/](research/) (Chinese).
   | E | D + resolution 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
   | F | D + resolution 720 | 36 (SteamVR stats) | 1.8 GB | 6.5 GB | 1.1 GB |
 
+- frame-vrc 0.5.1: the one-line installer (`get.sh`) no longer exits with an error after a successful install.
 - frame-vrc 0.5.0: `setup` does the whole install in one command; `switch` also fills in empty launch options.
 - Renamed from frame-eac to **frame-vrc** (0.4.0): the point is playing PC VRChat, not EAC games in general.
 - frame-vrc 0.3.0: D's settings by default, `resolution` command, SteamVR fps in benchmarks, thunk build packaging,

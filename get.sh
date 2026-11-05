@@ -16,7 +16,8 @@ main() {
   [[ "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "could not find the latest frame-vrc release" >&2; exit 1; }
   name="frame-vrc-$ver"
   tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' EXIT
+  # Expanded now: the trap runs after main's locals are gone (set -u would fail on $tmp).
+  trap "rm -rf '$tmp'" EXIT
   echo "==> Downloading frame-vrc $ver"
   curl -fL --progress-bar -o "$tmp/$name.tar.gz" "$repo/releases/download/v$ver/$name.tar.gz"
   curl -fsSL -o "$tmp/SHA256SUMS" "$repo/releases/download/v$ver/SHA256SUMS"

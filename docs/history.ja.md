@@ -35,6 +35,7 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat Wi
   | E | D + 解像度 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
   | F | D + 解像度 720 | 36（SteamVR の統計） | 1.8 GB | 6.5 GB | 1.1 GB |
 
+- frame-vrc 0.5.1：ワンライナーのインストーラ（`get.sh`）が、インストール成功後にエラーで終了しなくなった。
 - frame-vrc 0.5.0：`setup` でインストール全体をコマンド一つで。`switch` は起動オプションが空のときも自動で設定。
 - frame-eac から **frame-vrc** に改名（0.4.0）：目的は PC 版 VRChat を遊ぶことで、EAC のゲーム全般ではない。
 - frame-vrc 0.3.0：D の設定をデフォルトに、`resolution` コマンド、ベンチマークに SteamVR の fps、thunk ビルドのパッケージ化、
