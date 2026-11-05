@@ -32,6 +32,7 @@
   | E | D + 分辨率 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
   | F | D + 分辨率 720 | 36（SteamVR 统计） | 1.8 GB | 6.5 GB | 1.1 GB |
 
+- frame-vrc 0.5.2：全新安装（还没有 Valve 备份）时 `setup` 和 `switch` 不再无声退出；没有 Steam 配置或 SteamVR 时 `doctor` 和 `resolution` 也不再无声退出。由干净安装测试发现。
 - 安装脚本（`get.sh`）改为从仓库直接获取，不再放在 release 里，修它不用重新发布；装的仍然只是已发布的版本。
 - frame-vrc 0.5.1：一行安装命令（`get.sh`）安装成功后不再报错退出。
 - frame-vrc 0.5.0：`setup` 一条命令完成整个安装；`switch` 在启动选项为空时也会自动填上。

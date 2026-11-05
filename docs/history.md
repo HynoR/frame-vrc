@@ -37,6 +37,8 @@ Raw notes: [research/](research/) (Chinese).
   | E | D + resolution 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
   | F | D + resolution 720 | 36 (SteamVR stats) | 1.8 GB | 6.5 GB | 1.1 GB |
 
+- frame-vrc 0.5.2: `setup` and `switch` no longer stop silently on a new install (no Valve backup yet); `doctor` and
+  `resolution` no longer stop silently without Steam's config or SteamVR. Found by the clean-install test.
 - The installer (`get.sh`) is fetched from the repository instead of the release, so fixes to it need no new release;
   it still installs only released versions.
 - frame-vrc 0.5.1: the one-line installer (`get.sh`) no longer exits with an error after a successful install.

@@ -3,7 +3,7 @@
 # (StonkGuy/FEX, eac-* tag). Other EAC games are not a goal and untested.
 # Runs as user steamos, never sudo, writes only under $HOME; every change has an undo. See README.md.
 set -euo pipefail
-VERSION=0.5.1
+VERSION=0.5.2
 repo=HynoR/frame-vrc
 here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 lib=$here/lib
@@ -31,7 +31,12 @@ same() {
   for f in $bins; do cmp -s "$1/usr/bin/$f" "$2/usr/bin/$f" || return 1; done
   for f in $files; do cmp -s "$1/$f" "$2/$f" || return 1; done
 }
-valve_backup() { ls -d "$backup"/FEX-* 2>/dev/null | head -1; }
+# Empty output, not an error, when there is no backup yet (a new install): callers run under set -e.
+valve_backup() {
+  local d
+  for d in "$backup"/FEX-*; do [[ -d $d ]] && { echo "$d"; break; }; done
+  return 0
+}
 same_thunks() {
   local f
   for f in $thunks; do cmp -s "$1/$f" "$2/$f" || return 1; done
@@ -139,7 +144,7 @@ ours() { [[ "$1" == *EAC_LAUNCHERDIR=* && "$1" == *PROTON_EAC_RUNTIME=* ]]; }
 # The game's compatibility tool in Steam: CompatToolMapping > "<appid>" > "name"
 compat_tool() {
   awk -v id="\"$appid\"" '/"CompatToolMapping"/{m=1} m&&$1==id{a=1} a&&$1=="\"name\""{gsub(/"/,"",$2); print $2; exit}' \
-    "$steam/config/config.vdf" 2>/dev/null
+    "$steam/config/config.vdf" 2>/dev/null || true
 }
 
 # The eac package of the latest frame-vrc release (GitHub's API, no token needed).
@@ -407,7 +412,7 @@ cmd_resolution() {
   preset "${2:-}"
   local vrcmd=/opt/steamvr/bin/linuxarm64/vrcmd key="steam.app.$appid.resolutionOverride" prev=$data/resolution.$appid.prev
   [[ -x $vrcmd ]] || die "SteamVR's vrcmd not found ($vrcmd)"
-  vr_get() { timeout 10 "$vrcmd" --settings-int "$key" 2>/dev/null | sed -n "s/^$key=//p" | tail -1; }
+  vr_get() { { timeout 10 "$vrcmd" --settings-int "$key" 2>/dev/null || true; } | sed -n "s/^$key=//p" | tail -1; }
   local cur; cur=$(vr_get)
   [[ -n $cur ]] || die "SteamVR did not answer: start SteamVR (VR mode) and try again"
   case $op in
