@@ -2,8 +2,11 @@
 
 [English](README.md) · **中文** · [日本語](README.ja.md)
 
-> **只适合爱折腾的人。** 这是非官方的研究项目，面向会用 Linux 命令行、会看日志、出了问题能自己恢复的人。
-> 如果不是，请等官方支持。风险自负，见[免责声明](#免责声明)。
+> [!WARNING]
+> **免责声明（请先阅读）。** frame-vrc 是非官方项目，不是 Valve、VRChat 或 Epic Games 制作或支持的。它会安装和切换大量
+> 非官方、经过修改的组件：补丁版 FEX（x86 模拟器）、换了修改版 DXVK（注视点渲染）的 Proton Experimental 副本，以及通过
+> Steam 客户端修改的 Steam 设置。使用它需要一定基础：熟悉 Linux、命令行、会看日志，出了问题能自己恢复。
+> **如果不了解这些，请谨慎运行本程序**，或者等官方支持。风险自负，完整内容见[免责声明](#免责声明)。
 
 在 **Steam Frame** 上独立运行 **PC（Windows）版 VRChat**（包括 Easy Anti-Cheat），用的是
 [StonkGuy/FEX](https://github.com/StonkGuy/FEX) 的补丁版 FEX（`eac-*` 标签，来自 [steamac](https://github.com/StonkGuy/steamac) 的 `fex-eac/`），
@@ -19,16 +22,23 @@ EAC 没有被绕过：跑的是 Valve 的 Proton EasyAntiCheat Runtime 里原版
 
 1. 在 Steam 里：安装 **Proton Experimental** 和 **Proton EasyAntiCheat Runtime**；**VRChat > 属性 > 兼容性 > Proton Experimental**，
    让它下载 Windows 版。没有 **FEX-Emu** 的话也装上（库 > 工具）。
-2. 在 Frame 上（Konsole 或 SSH，普通用户，不要 sudo），SteamVR 开着：
+2. 在 Frame 上一行安装 frame-vrc（Konsole 或 SSH，普通用户，不要 sudo）。它会下载最新 release、校验 SHA-256，
+   并编译 VR 面板（约一分钟）：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # 安装 frame-vrc
-~/.local/bin/frame-vrc setup
-~/.local/bin/frame-vrc launch
+curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 ```
 
-`setup` 按推荐配置设好：补丁版 FEX、DFR 版 Proton、渲染分辨率 1920 + DFR，以及下面那些测过的参数。两个包都从最新 release 下载并校验 SHA-256。
-Steam 会重启一次（让它认出新的 Proton）。第一次进世界约 3 分钟，之后约 20 秒。
+3. 在头显里：SteamVR 仪表板 > 库（应用列表）> **frame-vrc** > **Set up everything**（点两次），然后 **Launch VRChat**。
+   或者用命令行：`~/.local/bin/frame-vrc setup` 和 `~/.local/bin/frame-vrc launch`。
+
+setup 按推荐配置设好：补丁版 FEX、DFR 版 Proton、渲染分辨率 1920 + DFR，以及下面那些测过的参数。两个包都从最新 release
+下载并校验 SHA-256。**Steam 和 SteamVR 会重启一次**（让 Steam 认出新的 Proton）：画面会消失约一分钟再回来，setup 会继续，
+日志页能看到每一步。第一次进世界约 3 分钟，之后约 20 秒。
+
+**VR 面板**显示当前设置，检查环境（VRChat、Proton Experimental、EAC Runtime、FEX-Emu、启动选项），每个问题旁边有修复按钮；
+还有分辨率、DFR、高级开关、监控页（内存、swap、每核 CPU、温度、VRChat 的内存和 CPU）和日志页。界面英文或日文（侧栏按钮）。
+设置类按钮点完 1.5 秒后一次性应用。它不常驻：用仪表板的关闭按钮关掉即可。每个按钮都是运行一条 `frame-vrc` 命令。
 
 还原成官方版：`frame-vrc uninstall`。细节和其他安装方式：[docs/install.zh-CN.md](docs/install.zh-CN.md)。
 
@@ -39,7 +49,7 @@ Steam 会重启一次（让它认出新的 Proton）。第一次进世界约 3 �
 | `frame-vrc fex` | `valve` Steam 的 FEX · `eac` 补丁版（EAC 需要它） | eac |
 | `frame-vrc proton` | `stock` Proton Experimental · `dfr` 它的副本，换上 DFR 版 DXVK（Steam 自己那份不动） | dfr |
 | `frame-vrc resolution` | `1056` 性能 · `1440` 均衡 · `1920` 画质；高级：`1600`、`2160`、任意 N | 1920 |
-| `frame-vrc dfr` | `auto` 1600 及以上自动开 · `off` · `def`；高级：`wide`、`ext`（适合 2160 及以上） | auto |
+| `frame-vrc dfr` | `auto` 1440 及以上自动开 · `off` · `def`；高级：`wide`、`ext`（适合 2160 及以上） | auto |
 | `frame-vrc tune`（高级） | `cpus N` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
 
 中间的分辨率用 SteamVR 自己的设置就能调；列出 1056 是因为 SteamVR 界面最低只到 1440。
@@ -61,7 +71,7 @@ Steam 会重启一次（让它认出新的 Proton）。第一次进世界约 3 �
 
 ```text
 frame-vrc setup [--no-dfr] [--resolution N] [--dfr URL|FILE] [FEX 的 URL|FILE]
-frame-vrc status | doctor | launch
+frame-vrc panel | status | doctor | launch | update
 frame-vrc fex valve|eac             frame-vrc proton stock|dfr [URL|FILE]
 frame-vrc resolution 1056|1440|1920 frame-vrc dfr auto|off|def
 frame-vrc uninstall [--purge]       还原 Valve 的 FEX、Proton Experimental、你原来的启动选项和分辨率

@@ -57,7 +57,7 @@ then pack it with this repository's `tools/make-dfr-package.sh DXVK_SRC OPENVR_S
 ## 4. How DFR runs
 
 With the DFR Proton, VRChat's launch options start with `…/lib/dfr-run`. It runs natively before the game: it sets
-DXVK's DFR variables for the chosen level (`frame-vrc dfr`; `auto` = on from resolution 1600) and starts the
+DXVK's DFR variables for the chosen level (`frame-vrc dfr`; `auto` = on from resolution 1440) and starts the
 eye-tracking bridge, which begins once VRChat has the VR scene and ends with the game (log:
 `~/.local/share/frame-vrc/bridge.log`). With the headset off your head the gaze is invalid and DXVK shades at full rate.
 

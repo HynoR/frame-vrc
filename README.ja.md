@@ -2,8 +2,13 @@
 
 [English](README.md) · [中文](README.zh-CN.md) · **日本語**
 
-> **いじるのが好きな人向けです。** これは非公式の研究プロジェクトで、Linux のシェルやログの読み方に慣れていて、問題が起きても
-> 自分で元に戻せる人を対象にしています。そうでなければ公式のサポートを待ってください。自己責任でお使いください（[免責事項](#免責事項)）。
+> [!WARNING]
+> **免責事項（最初にお読みください）。** frame-vrc は非公式のプロジェクトで、Valve、VRChat、Epic Games が作成・サポートする
+> ものではありません。非公式で改変された多くのコンポーネントをインストール・切り替えします：パッチ版 FEX（x86 エミュレーター）、
+> 改変版 DXVK（注視点レンダリング）を入れた Proton Experimental の複製、Steam クライアント経由で変更する Steam の設定。
+> 使うには Linux、コマンドライン、ログの読み方についてある程度の知識と、問題が起きたときに自分で元に戻せることが必要です。
+> **よく分からない場合は、実行する前に慎重に考えてください**。または公式のサポートを待ってください。自己責任でお使いください
+> （全文は[免責事項](#免責事項)）。
 
 **Steam Frame** 単体で **PC（Windows）版 VRChat** を Easy Anti-Cheat 込みで動かします。[StonkGuy/FEX](https://github.com/StonkGuy/FEX) の
 パッチ版 FEX（`eac-*` タグ、[steamac](https://github.com/StonkGuy/steamac) の `fex-eac/` 由来）を使い、
@@ -19,16 +24,24 @@ EAC は回避していません。Valve の Proton EasyAntiCheat Runtime に入�
 
 1. Steam で **Proton Experimental** と **Proton EasyAntiCheat Runtime** をインストールし、**VRChat > プロパティ > 互換性 >
    Proton Experimental** にして Windows 版をダウンロードさせます。**FEX-Emu** がなければそれも入れます（ライブラリ > ツール）。
-2. Frame 上で（Konsole か SSH、通常ユーザー、sudo は使わない）、SteamVR を起動した状態で：
+2. Frame 上で frame-vrc を 1 行でインストールします（Konsole か SSH、通常ユーザー、sudo は使わない）。最新リリースを
+   ダウンロードして SHA-256 を確認し、VR パネルをビルドします（約 1 分）：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # frame-vrc をインストール
-~/.local/bin/frame-vrc setup
-~/.local/bin/frame-vrc launch
+curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 ```
 
-`setup` は推奨設定を適用します：パッチ版 FEX、DFR 版 Proton、描画解像度 1920 + DFR、下の検証済みの設定。2 つのパッケージは最新リリースから
-ダウンロードし、SHA-256 を確認します。Steam が 1 回再起動します（新しい Proton を認識させるため）。最初のワールド参加は約 3 分、以降は約 20 秒です。
+3. ヘッドセットで：SteamVR ダッシュボード > ライブラリ（アプリ一覧）> **frame-vrc** > **まとめて設定**（2 回タップ）、
+   続けて **VRChat を起動**。コマンドラインなら `~/.local/bin/frame-vrc setup` と `~/.local/bin/frame-vrc launch`。
+
+設定は推奨構成を適用します：パッチ版 FEX、DFR 版 Proton、描画解像度 1920 + DFR、下の検証済みの設定。2 つのパッケージは
+最新リリースからダウンロードし、SHA-256 を確認します。**Steam と SteamVR が 1 回再起動します**（新しい Proton を認識させるため）。
+画面が 1 分ほど消えてから戻り、設定はそのまま続きます。各ステップはログページで見られます。最初のワールド参加は約 3 分、以降は約 20 秒です。
+
+**VR パネル**は現在の設定を表示し、環境（VRChat、Proton Experimental、EAC Runtime、FEX-Emu、起動オプション）を確認して
+問題ごとに修正ボタンを出します。解像度、DFR、詳細スイッチ、モニターページ（メモリ、スワップ、コアごとの CPU、温度、
+VRChat のメモリと CPU）、ログページもあります。表示は英語か日本語（サイドバーのボタン）。設定のボタンは最後のタップから
+1.5 秒後にまとめて適用されます。常駐はせず、ダッシュボードの閉じるボタンで終了します。どのボタンも `frame-vrc` のコマンドを 1 つ実行します。
 
 公式版に戻す：`frame-vrc uninstall`。詳細とほかの方法：[docs/install.ja.md](docs/install.ja.md)。
 
@@ -39,7 +52,7 @@ curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash 
 | `frame-vrc fex` | `valve` Steam の FEX · `eac` パッチ版（EAC に必要） | eac |
 | `frame-vrc proton` | `stock` Proton Experimental · `dfr` その複製に DFR 版 DXVK を入れたもの（Steam の本体はそのまま） | dfr |
 | `frame-vrc resolution` | `1056` 性能 · `1440` バランス · `1920` 画質；上級：`1600`、`2160`、任意の N | 1920 |
-| `frame-vrc dfr` | `auto` 1600 以上で自動オン · `off` · `def`；上級：`wide`、`ext`（2160 以上向け） | auto |
+| `frame-vrc dfr` | `auto` 1440 以上で自動オン · `off` · `def`；上級：`wide`、`ext`（2160 以上向け） | auto |
 | `frame-vrc tune`（上級） | `cpus N` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
 
 中間の解像度は SteamVR の設定で調整できます。1056 を載せているのは SteamVR の画面では 1440 までしか下げられないためです。
@@ -62,7 +75,7 @@ FEX の翻訳ブロック 500 命令（ゲームのメモリ −0.65 GB、zram �
 
 ```text
 frame-vrc setup [--no-dfr] [--resolution N] [--dfr URL|FILE] [FEX の URL|FILE]
-frame-vrc status | doctor | launch
+frame-vrc panel | status | doctor | launch | update
 frame-vrc fex valve|eac             frame-vrc proton stock|dfr [URL|FILE]
 frame-vrc resolution 1056|1440|1920 frame-vrc dfr auto|off|def
 frame-vrc uninstall [--purge]       Valve の FEX、Proton Experimental、元の起動オプションと解像度に戻す

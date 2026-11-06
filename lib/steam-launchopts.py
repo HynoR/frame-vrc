@@ -83,7 +83,9 @@ elif op == "get":
     print(get(app))
 elif op == "set":
     evaluate(f"SteamClient.Apps.SetAppLaunchOptions({app}, {json.dumps(sys.stdin.read())})")
+elif op == "run":  # as the Play button does
+    evaluate(f"SteamClient.Apps.RunGame('{app}', '', -1, 100)")
 elif op == "stop":
     evaluate(f"SteamClient.Apps.TerminateApp('{app}', false)")
 else:
-    sys.exit("usage: steam-launchopts.py get|set|stop APPID | compat APPID TOOL | restart | ping")
+    sys.exit("usage: steam-launchopts.py get|set|run|stop APPID | compat APPID TOOL | restart | ping")

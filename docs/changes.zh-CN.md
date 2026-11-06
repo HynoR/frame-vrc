@@ -28,10 +28,11 @@ Proton Experimental 本身从不修改：DFR 用的是副本（见下）。
 | 内容 | 位置 | 怎么删 |
 |---|---|---|
 | 工具本身 | `~/.local/lib/frame-vrc`、`~/.local/bin/frame-vrc` | `frame-vrc uninstall` |
+| VR 面板在应用列表里的入口 | `~/.local/share/applications/frame-vrc.desktop`（面板程序本身在 `~/.local/lib/frame-vrc`） | `frame-vrc uninstall` |
 | **Valve 版 FEX 的备份**（留着） | `~/fex-eac-work/valve-backup/FEX-<版本>/` | `uninstall --purge`，只在已经换回 Valve 版后才删 |
 | 补丁版 FEX（在头显上编译的话还有源码） | `~/fex-eac-work/`（`stage`、`stage.prev`、`FEX`、`build-*`、`build.log`） | `uninstall --purge` |
 | DFR 版 Proton（Proton Experimental 的副本，换了 DFR 版 DXVK；原件在 `dxvk-orig/`） | `~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr/`（约 1.5 GB） | `frame-vrc uninstall`，或在 `proton stock` 后删掉文件夹 |
-| 设置、DFR 包、bridge 日志、基准报告 | `~/.local/share/frame-vrc/`（`config`、`dfr/`、`bridge.log`、`bench/`、`dist/`） | `uninstall --purge`，或直接删 |
+| 设置、DFR 包、bridge 日志、基准报告 | `~/.local/share/frame-vrc/`（`config`、`dfr/`、`bridge.log`、`bench/`、`dist/`、`panel/`：面板最近一次操作和输出） | `uninstall --purge`，或直接删 |
 | bridge 的注视点文件 | `~/.local/share/frame-pcvr/gaze/frame-gaze-v1.bin`（64 字节，bridge 停止时清空） | 删掉文件夹 |
 
 ## 玩游戏时产生的（Steam、FEX、Proton 产生，不是 frame-vrc）

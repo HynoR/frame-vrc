@@ -29,10 +29,11 @@ Proton Experimental is never modified: DFR uses a copy (below).
 | What | Where | Removed by |
 |---|---|---|
 | The tool | `~/.local/lib/frame-vrc`, `~/.local/bin/frame-vrc` | `frame-vrc uninstall` |
+| The VR panel's app-list entry | `~/.local/share/applications/frame-vrc.desktop` (the panel itself is in `~/.local/lib/frame-vrc`) | `frame-vrc uninstall` |
 | **Backup of Valve's FEX** (keep it) | `~/fex-eac-work/valve-backup/FEX-<version>/` | `uninstall --purge`, only after Valve's build is back |
 | The patched FEX build (and sources if built here) | `~/fex-eac-work/` (`stage`, `stage.prev`, `FEX`, `build-*`, `build.log`) | `uninstall --purge` |
 | The DFR Proton (a copy of Proton Experimental with the DFR DXVK; originals in `dxvk-orig/`) | `~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr/` (~1.5 GB) | `frame-vrc uninstall`, or delete the folder after `proton stock` |
-| Settings, DFR package, bridge log, benchmark reports | `~/.local/share/frame-vrc/` (`config`, `dfr/`, `bridge.log`, `bench/`, `dist/`) | `uninstall --purge`, or delete |
+| Settings, DFR package, bridge log, benchmark reports | `~/.local/share/frame-vrc/` (`config`, `dfr/`, `bridge.log`, `bench/`, `dist/`, `panel/`: the panel's last action and its output) | `uninstall --purge`, or delete |
 | The bridge's gaze file | `~/.local/share/frame-pcvr/gaze/frame-gaze-v1.bin` (64 bytes, emptied when the bridge stops) | delete the folder |
 
 ## Created while playing (by Steam, FEX and Proton, not frame-vrc)

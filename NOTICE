@@ -8,4 +8,8 @@ frame-vrc downloads or builds FEX from https://github.com/StonkGuy/FEX (MIT, as 
 no game files and no Easy Anti-Cheat files: EAC comes from Valve's Proton EasyAntiCheat Runtime, installed by Steam.
 Prebuilt FEX packages (fex-*-steamframe-aarch64.tar.gz, made by `frame-vrc pack`) contain FEX binaries built from that
 source, with FEX's MIT license as LICENSE.FEX.
+src/frame-vrc-panel (the VR panel) is MIT-licensed (src/frame-vrc-panel/LICENSE), adapted from FrameClash's panel;
+its src/third_party_frameeyeosc/ is copied unmodified from frameeyeosc (https://github.com/sasaken1102r/frameeyeosc,
+MIT, LICENSE.frameeyeosc next to it), and third_party/openvr/openvr.h is the OpenVR SDK header (BSD-3-Clause, LICENSE
+next to it). The panel links SteamVR's own libopenvr_api.so at run time; frame-vrc does not ship it.
 Not affiliated with Valve, Epic Games, VRChat, FEX-Emu or FX GAMES.

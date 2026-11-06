@@ -2,9 +2,13 @@
 
 **English** · [中文](README.zh-CN.md) · [日本語](README.ja.md)
 
-> **For tinkerers only.** This is an unofficial research project for people who are comfortable with a Linux shell,
-> reading logs and undoing things themselves. If that is not you, please wait for official support. Use at your own
-> risk; see the [disclaimer](#disclaimer).
+> [!WARNING]
+> **Disclaimer — read this first.** frame-vrc is an unofficial project, not made or supported by Valve, VRChat or
+> Epic Games. It installs and switches a lot of unofficial, modified components: a patched FEX (x86 emulator), a copy
+> of Proton Experimental with a modified DXVK (foveated rendering), and Steam settings changed through Steam's client.
+> Using it takes some experience with Linux, the command line and reading logs, and the ability to undo things
+> yourself. **If you are not familiar with this, think carefully before running it**, or wait for official support.
+> Use at your own risk; see the full [disclaimer](#disclaimer).
 
 Run the **PC (Windows) version of VRChat**, Easy Anti-Cheat included, standalone on the **Steam Frame**, with the
 patched FEX from [StonkGuy/FEX](https://github.com/StonkGuy/FEX) (`eac-*` tags, from
@@ -21,17 +25,26 @@ FEX only makes the emulation exact enough for it. The goal is **playing VRChat**
 
 1. In Steam: install **Proton Experimental** and **Proton EasyAntiCheat Runtime**; set **VRChat > Properties >
    Compatibility > Proton Experimental** and let it download the Windows build. Install **FEX-Emu** too (Library > Tools) if it is missing.
-2. On the Frame, in Konsole or over SSH, as the normal user (never sudo), with SteamVR running:
+2. Install frame-vrc on the Frame with one line (Konsole or SSH, as the normal user, never sudo). It downloads the
+   latest release, checks its SHA-256 and builds the VR panel (about a minute):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # installs frame-vrc
-~/.local/bin/frame-vrc setup
-~/.local/bin/frame-vrc launch
+curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 ```
 
-`setup` applies the recommended settings: the patched FEX, the DFR Proton, render resolution 1920 with DFR, and the
-tested options below. It downloads both packages from the latest release and checks their SHA-256. Steam restarts once
-(to list the new Proton). The first world join takes about 3 minutes; later ones about 20 seconds.
+3. In the headset: SteamVR dashboard > Library (app list) > **frame-vrc** > **Set up everything** (tap twice), then
+   **Launch VRChat**. Or from the command line: `~/.local/bin/frame-vrc setup` and `~/.local/bin/frame-vrc launch`.
+
+Setup applies the recommended settings: the patched FEX, the DFR Proton, render resolution 1920 with DFR, and the
+tested options below. It downloads both packages from the latest release and checks their SHA-256. **Steam and SteamVR
+restart once** (to list the new Proton): the view goes away for about a minute, then comes back; setup carries on, and
+its Log page shows every step. The first world join takes about 3 minutes; later ones about 20 seconds.
+
+**The VR panel** shows what is set, checks the environment (VRChat, Proton Experimental, EAC Runtime, FEX-Emu, launch
+options) with a fix button on each problem, and has resolution, DFR, advanced switches, a Monitor page (memory, swap,
+CPU per core, temperature, VRChat's memory and CPU) and a Log page. English or Japanese (sidebar button). Setting taps
+apply together 1.5 s after the last one. It is not resident: it closes with the dashboard's close button. Every
+button runs a `frame-vrc` command.
 
 Back to the official versions: `frame-vrc uninstall`. Details and other ways: [docs/install.md](docs/install.md).
 
@@ -42,7 +55,7 @@ Back to the official versions: `frame-vrc uninstall`. Details and other ways: [d
 | `frame-vrc fex` | `valve` Steam's FEX · `eac` the patched FEX (EAC needs it) | eac |
 | `frame-vrc proton` | `stock` Proton Experimental · `dfr` its copy with the DFR DXVK (Steam's own copy stays untouched) | dfr |
 | `frame-vrc resolution` | `1056` performance · `1440` balanced · `1920` quality; advanced: `1600`, `2160`, any N | 1920 |
-| `frame-vrc dfr` | `auto` on from 1600 up · `off` · `def`; advanced: `wide`, `ext` (for 2160 and up) | auto |
+| `frame-vrc dfr` | `auto` on from 1440 up · `off` · `def`; advanced: `wide`, `ext` (for 2160 and up) | auto |
 | `frame-vrc tune` (advanced) | `cpus N` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
 
 SteamVR's own settings cover the resolutions in between; 1056 is listed because SteamVR's UI stops at 1440.
@@ -66,7 +79,7 @@ Memory is the limit: SteamVR, Steam's UI and tracking take about 7 of the 16 GB.
 
 ```text
 frame-vrc setup [--no-dfr] [--resolution N] [--dfr URL|FILE] [FEX URL|FILE]
-frame-vrc status | doctor | launch
+frame-vrc panel | status | doctor | launch | update
 frame-vrc fex valve|eac             frame-vrc proton stock|dfr [URL|FILE]
 frame-vrc resolution 1056|1440|1920 frame-vrc dfr auto|off|def
 frame-vrc uninstall [--purge]       back to Valve's FEX, Proton Experimental, your launch options and resolution

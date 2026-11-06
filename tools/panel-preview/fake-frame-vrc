@@ -1,0 +1,20 @@
+#!/bin/sh
+# A stand-in for frame-vrc in the preview container: the status and doctor answers of scenario $FAKE (fresh | ready),
+# and actions that just print a few lines.
+d=$(dirname "$0")
+case "$1 ${2:-}" in
+  "status --json") cat "$d/status-${FAKE:-ready}.json" ;;
+  "doctor --json") cat "$d/doctor-${FAKE:-ready}.json"; [ "${FAKE:-ready}" = ready ] ;;
+  "setup "*)
+    echo "==> [1/7] Checking what Steam has installed"; echo "ok: FEX-Emu"; echo "ok: Proton - Experimental"
+    echo "ok: Proton EasyAntiCheat Runtime"; echo "ok: VRChat (Windows build)"
+    echo "==> [2/7] Downloading the patched FEX"; echo "downloading fex-eac-2610.3-45-g6effd23-steamframe-aarch64.tar.gz"
+    printf '##########              14.2%%\r##########################     72.9%%\r############################ 100.0%%\n'
+    echo "fex-eac-2610.3-45-g6effd23-steamframe-aarch64.tar.gz: OK"; echo "fetched: eac-2610.3-45-g6effd23. Next: frame-vrc fex eac"
+    echo "==> [3/7] Installing the patched FEX (Valve's build is backed up)"
+    echo "fex: eac (eac-2610.3-45-g6effd23); Valve's build is backed up in ~/fex-eac-work/valve-backup/FEX-2607-76-g37265b1"
+    echo "==> [4/7] DFR Proton: download the DFR DXVK, copy Proton Experimental, restart Steam if new"
+    echo "downloading dfr-dxvk-6f6ca528-steamframe.tar.gz"; printf '#######                 31.0%%\r################        58.4%%'
+    sleep "${FAKE_SLOW:-1}"; echo ;;
+  *) echo "frame-vrc $*"; sleep 1; echo "copying Proton Experimental 11.0-20261027b to ~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr (~1.5 GB) ..."; sleep "${FAKE_SLOW:-1}"; echo "done: $*" ;;
+esac

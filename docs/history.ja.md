@@ -9,6 +9,7 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat �
 
 | バージョン | 日付 | 変更点 |
 |---|---|---|
+| 0.7.0 | 2026-11-06 | DFR の `auto` を 1440 からオンに（以前は 1600）。VR パネル：SteamVR のアプリ一覧の **frame-vrc**（インストール時にヘッドセットでビルド）。現在の設定、環境チェック（問題ごとに修正ボタン：Steam でのインストール、FEX、Proton、起動オプション）、推奨設定、解像度、DFR、ゲーム起動、詳細スイッチ、モニターページ（メモリ、スワップ、コアごとの CPU、温度、VRChat のメモリと CPU）、ログページ（setup の各ステップ）、英語・日本語の表示。設定のタップはまとめて適用（`frame-vrc apply`）。`setup` は番号付きのステップを表示し、SteamVR の再起動前に知らせて 10 秒待つ。`launch` は Steam のクライアント API でゲームを起動し、起動したか確認。`fex eac` はパッケージを自分でダウンロード。`status --json`、`doctor --json`、`update`、`panel` を追加。`install-deps` は VRChat もインストール（先に Proton Experimental に設定）。 |
 | 0.6.1 | 2026-11-06 | 新規インストールでの DFR：視線ブリッジのフォルダを先に作る（ないとブリッジが視線データを書けず、DFR がずっとフルレートのままだった）。 |
 | 0.6.0 | 2026-11-06 | フォービエイテッドレンダリング（DFR）：`proton stock\|dfr`（Proton Experimental の複製に ji10me の DFR 版 DXVK）、`dfr auto\|off\|def`（auto = 1600 以上でオン）、ゲームと一緒に起動する視線ブリッジ（`lib/dfr-run`）。推奨構成：1920 + DFR。スイッチを整理（`fex`、`proton`、`resolution`、`dfr`、`tune`）、設定は 1 ファイルに、`status` と `launch` を追加。デスクトップのミラーウィンドウは既定で 640×480。Vulkan thunk ビルドを削除。 |
 | 0.5.3 | 2026-11-05 | FEX のコードキャッシュを VRChat と EAC ランチャーだけに：Wine の補助プロセスが約 640 MB 減、フレームレートは変わらず。 |
@@ -23,7 +24,7 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat �
 - **効果あり：** パッチ版 FEX（ないと EAC が起動しない）、上の既定の設定、1920 での DFR（シェーダーが重いワールドでフレームレート +15〜25%、軽いワールドではノイズの範囲。
   GPU 時間は減るがメモリは減らない）。DFR の DLL は Proton 自身の DXVK フォルダに置く必要があり、`VRChat.exe` の隣に置くと Wine のローダーで落ちます。
 - **効果なし：** Vulkan thunk（VR で SteamVR の x86 クライアントがフレームを渡すと落ちる。デスクトップのみで CPU −10%）、FEX の TSO オフ（約 35 秒で落ちる）、
-  HalfBarrier TSO オフ（効果なし）、Mesa の VRAM 上限（ネイティブ側のみ）、1440 での DFR（効果なし）、より粗い DFR（1920 で `ext` は `def` より速くない）。
+  HalfBarrier TSO オフ（効果なし）、Mesa の VRAM 上限（ネイティブ側のみ）、1440 での DFR のベンチマーク（フレームレートはノイズの範囲だが実際のプレイでは効果があるため、0.7.0 から `auto` は 1440 でオン）、より粗い DFR（1920 で `ext` は `def` より速くない）。
 - **限界：** メモリ（SteamVR、Steam の画面、トラッキングで 16 GB のうち約 7 GB）と CPU（FEX による x86 の翻訳：1056 で 1 フレーム約 20 ms、
   重いワールドの 1920 で約 35〜40 ms）。SteamVR はゲームを 72 Hz の半分か 3 分の 1 で動かします。
 - **測定：** ゲームの `/proc/<pid>/smaps` 全体を読むとカクつく（サンプラーは `smaps_rollup` を使う）。無人で測るときはヘッドセットのスリープを切る

@@ -3,7 +3,7 @@
 # (StonkGuy/FEX, eac-* tag), optionally with foveated rendering (DFR). Other EAC games are not a goal and untested.
 # Runs as user steamos, never sudo, writes only under $HOME; every change has an undo. See README.md.
 set -euo pipefail
-VERSION=0.6.1
+VERSION=0.7.0
 repo=HynoR/frame-vrc
 here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 lib=$here/lib
@@ -156,9 +156,11 @@ print(next(a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if 
 get_checked() {
   local src=$1 dir=$2 n=${1##*/}
   if [[ -f $src && $src == *.tar.gz ]]; then
+    echo "using $src" >&2
     [[ -f $src.sha256 ]] || die "no $src.sha256 next to it: download that too"
     cp "$src" "$src.sha256" "$dir/"
   elif [[ $src == https://*.tar.gz ]]; then
+    echo "downloading $n" >&2
     curl -fL --progress-bar -o "$dir/$n" "$src" >&2
     curl -fsSL -o "$dir/$n.sha256" "$src.sha256"
   else
@@ -170,6 +172,8 @@ get_checked() {
 
 # ---- commands: setup and checks -------------------------------------------------------------------------------
 # Steam installs what is missing; each steam://install opens Steam's own install prompt for the user to confirm.
+# VRChat is installed once Proton Experimental is there, after its compatibility tool is set (else Steam picks the
+# Android build).
 cmd_install_deps() {
   local missing=0 id dir
   for pair in "3127680:FEX-Emu" "1493710:Proton - Experimental" "1826330:Proton EasyAntiCheat Runtime"; do
@@ -180,80 +184,130 @@ cmd_install_deps() {
     steam "steam://install/$id" >/dev/null 2>&1 &
     sleep 2
   done
-  [[ -f "$apps/common/$name/$name.exe" ]] || { missing=1; echo "$name (Windows build): in Steam set $name > Properties > Compatibility > Proton Experimental, then install or update it"; }
+  if [[ ! -f "$apps/common/$name/$name.exe" ]]; then
+    missing=1
+    if [[ ! -d $proton_exp ]]; then
+      echo "$name: run this again once Proton Experimental is installed"
+    elif [[ -e "$apps/common/$name/$name.apk" ]]; then
+      set_compat_tool proton_experimental && echo "$name: set to Proton Experimental; Steam now downloads the Windows build" ||
+        echo "$name: in Steam set Properties > Compatibility > Proton Experimental"
+    else
+      set_compat_tool proton_experimental || echo "$name: in Steam set Properties > Compatibility > Proton Experimental before installing"
+      echo "asking Steam to install $name (app $appid): confirm in Steam"
+      steam "steam://install/$appid" >/dev/null 2>&1 &
+      sleep 2
+    fi
+  fi
   ((missing)) && echo "run frame-vrc setup again when Steam is done" || echo "all installed"
 }
 
+# JSON string (the texts here hold no control characters)
+jstr() { local v=${1//\\/\\\\}; printf '"%s"' "${v//\"/\\\"}"; }
+
 cmd_status() {
-  local s res tool d eff
+  local s res tool d eff cur launch
   s=$(fex_state) res=$(res_get) tool=$(compat_tool) d=$(cfg DFR)
   eff=$(dfr_effective "$d" "$res")
+  cur=$(opts_get 2>/dev/null || true)
+  if ! ours "$cur"; then [[ -z $cur ]] && launch=none || launch=other
+  elif [[ "$cur" == "$(launch_options)" ]]; then launch=set
+  else launch=stale; fi
+  if [[ ${1:-} == --json ]]; then
+    local running=false; pgrep -x VRChat.exe >/dev/null && running=true
+    printf '{"version":%s,"fex":%s,"fex_build":%s,"proton":%s,"steam_tool":%s,"resolution":%s,"dfr":%s,' \
+      "$(jstr $VERSION)" "$(jstr "$s")" "$(jstr "$(describe "$fex")")" "$(jstr "$(cfg PROTON)")" "$(jstr "$tool")" \
+      "${res:-0}" "$(jstr "$d")"
+    printf '"dfr_effective":%s,"cpus":%s,"dxvk_threads":%s,"vram":%s,"launch":%s,"game_running":%s}\n' \
+      "$(jstr "$eff")" "$(cfg CPUS)" "$(cfg DXVK_THREADS)" "$(cfg VRAM)" "$(jstr $launch)" $running
+    return
+  fi
   echo "frame-vrc $VERSION"
   echo "  fex         $s ($(describe "$fex"))"
   echo "  proton      $(cfg PROTON) (Steam uses: ${tool:-default})"
   echo "  resolution  ${res:-? (start SteamVR)}"
   echo "  dfr         $d$([[ $(cfg PROTON) == dfr ]] && echo " -> $eff" || echo " (needs proton dfr)")"
   echo "  tune        cpus $(cfg CPUS), dxvk-threads $(cfg DXVK_THREADS), vram $(cfg VRAM) MB"
-  local cur; cur=$(opts_get 2>/dev/null || true)
-  echo "  launch      $(ours "$cur" && { [[ "$cur" == "$(launch_options)" ]] && echo "set by frame-vrc" || echo "frame-vrc's, out of date: frame-vrc launch-options set"; } || echo "not frame-vrc's")"
+  case $launch in
+    set) echo "  launch      set by frame-vrc" ;;
+    stale) echo "  launch      frame-vrc's, out of date: frame-vrc launch-options set" ;;
+    *) echo "  launch      not frame-vrc's" ;;
+  esac
 }
-# auto: DFR from 1600 up (measured: no gain at 1440, +15-25% fps at 1920 in a heavy world). Same rule as lib/dfr-run.
+# auto: DFR from 1440 up (+15-25% fps at 1920 in a heavy world; at 1440 the fps gain was within noise in the
+# benchmark, but it helps in play, 2026-11-06). Same rule as lib/dfr-run.
 dfr_effective() {
   case $1 in
-    auto) [[ -n $2 ]] && (($2 >= 1600)) && echo def || echo off ;;
+    auto) [[ -n $2 ]] && (($2 >= 1440)) && echo def || echo off ;;
     *) echo "$1" ;;
   esac
 }
 
+# Each row: level, group, text and the frame-vrc command that fixes it ("" = none). --json: one array of rows (the VR
+# panel draws it and offers the fixes as buttons).
 cmd_doctor() {
-  local bad=0
-  ok() { printf '  ok    %s\n' "$*"; }
-  warn() { printf '  WARN  %s\n' "$*"; }
-  fail() { printf '  FAIL  %s\n' "$*"; bad=1; }
-  echo "frame-vrc $VERSION doctor"
-  echo "device"
+  local bad=0 json=false group="" rows=()
+  [[ ${1:-} == --json ]] && json=true
+  row() {  # LEVEL FIX TEXT
+    [[ $1 == fail ]] && bad=1
+    if $json; then
+      rows+=("{\"group\":$(jstr "$group"),\"level\":$(jstr "$1"),\"text\":$(jstr "$3"),\"fix\":$(jstr "$2")}")
+    else
+      local l; case $1 in ok) l="ok  " ;; warn) l=WARN ;; *) l=FAIL ;; esac
+      printf '  %s  %s%s\n' "$l" "$3" "${2:+: frame-vrc $2}"
+    fi
+  }
+  section() { group=$1; $json || echo "$1"; }
+  $json || echo "frame-vrc $VERSION doctor"
+  section device
   if grep -q '^VARIANT_ID="\?vr' /etc/os-release && [[ $(uname -m) == aarch64 ]]; then
-    ok "Steam Frame: SteamOS $(sed -n 's/^VERSION_ID=//p' /etc/os-release) build $(sed -n 's/^BUILD_ID=//p' /etc/os-release)"
+    row ok "" "Steam Frame: SteamOS $(sed -n 's/^VERSION_ID=//p' /etc/os-release) build $(sed -n 's/^BUILD_ID=//p' /etc/os-release)"
   else
-    fail "not a Steam Frame (SteamOS VARIANT_ID=vr, aarch64)"
+    row fail "" "not a Steam Frame (SteamOS VARIANT_ID=vr, aarch64)"
   fi
-  ok "memory $(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo) MB available of $(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo) MB; max temperature $(($(maxtemp) / 1000)) C"
-  echo "steam"
-  [[ -d $fex ]] && ok "FEX-Emu" || fail "FEX-Emu not installed: frame-vrc install-deps"
-  [[ -d $proton_exp ]] && ok "Proton Experimental $(cut -d' ' -f2 "$proton_exp/version" 2>/dev/null)" || fail "Proton Experimental not installed: frame-vrc install-deps"
-  [[ -d "$apps/common/Proton EasyAntiCheat Runtime" ]] && ok "Proton EasyAntiCheat Runtime" || fail "Proton EasyAntiCheat Runtime not installed: frame-vrc install-deps"
-  echo "$name"
+  row ok "" "memory $(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo) MB available of $(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo) MB; max temperature $(($(maxtemp) / 1000)) C"
+  local free; free=$(df -Pm "$HOME" | awk 'NR==2{print $4}')
+  ((free > 3072)) && row ok "" "disk: $((free / 1024)) GB free" || row warn "" "disk: $free MB free (the DFR Proton copy needs 3 GB)"
+  curl -fsI -m 5 https://github.com >/dev/null 2>&1 && row ok "" "network: github.com reachable" ||
+    row warn "" "network: github.com not reachable (setup and update download from it)"
+  section steam
+  steamapi ping >/dev/null 2>&1 && row ok "" "Steam is running" || row fail "" "Steam does not answer (start Steam)"
+  [[ -d $fex ]] && row ok "" "FEX-Emu" || row fail install-deps "FEX-Emu not installed"
+  [[ -d $proton_exp ]] && row ok "" "Proton Experimental $(cut -d' ' -f2 "$proton_exp/version" 2>/dev/null)" || row fail install-deps "Proton Experimental not installed"
+  [[ -d "$apps/common/Proton EasyAntiCheat Runtime" ]] && row ok "" "Proton EasyAntiCheat Runtime" || row fail install-deps "Proton EasyAntiCheat Runtime not installed"
+  section "$name"
   local gd="$apps/common/$name"
-  if [[ -f "$gd/$name.exe" ]]; then ok "Windows build installed"
-  elif [[ -e "$gd/$name.apk" ]]; then fail "the Android build is installed: set Properties > Compatibility > Proton Experimental"
-  else fail "not installed"; fi
+  if [[ -f "$gd/$name.exe" ]]; then row ok "" "Windows build installed"
+  elif [[ -e "$gd/$name.apk" ]]; then row fail install-deps "the Android build is installed (needs Proton Experimental)"
+  else row fail install-deps "not installed"; fi
   local tool want; tool=$(compat_tool)
   want=proton_experimental; [[ $(cfg PROTON) == dfr ]] && want=$dfr_tool
-  [[ $tool == "$want" ]] && ok "compatibility tool: $tool" || fail "compatibility tool is '${tool:-default}', not $want: frame-vrc proton $(cfg PROTON)"
+  [[ $tool == "$want" ]] && row ok "" "compatibility tool: $tool" || row fail "proton $(cfg PROTON)" "compatibility tool is '${tool:-default}', not $want"
   local cur; cur=$(opts_get 2>/dev/null || true)
-  if ! ours "$cur"; then fail "launch options not set: frame-vrc launch-options set"
-  elif [[ "$cur" != "$(launch_options)" ]]; then warn "launch options out of date: frame-vrc launch-options set"
-  else ok "launch options set"; fi
-  echo "FEX"
+  if [[ -n $cur ]] && ! ours "$cur"; then row fail "launch-options set" "launch options are your own (set replaces them; clear brings them back)"
+  elif ! ours "$cur"; then row fail "launch-options set" "launch options not set"
+  elif [[ "$cur" != "$(launch_options)" ]]; then row warn "launch-options set" "launch options out of date"
+  else row ok "" "launch options set"; fi
+  section FEX
   case $(fex_state) in
-    eac) ok "eac build installed: $(describe "$fex")" ;;
-    valve) fail "Valve's build installed ($(describe "$fex")): frame-vrc fex eac" ;;
-    patched-other) warn "an eac build not from this stage is installed: $(describe "$fex")" ;;
+    eac) row ok "" "eac build installed: $(describe "$fex")" ;;
+    valve) row fail "fex eac" "Valve's build installed ($(describe "$fex")); EAC needs the eac build" ;;
+    patched-other) row warn "" "an eac build not from this stage is installed: $(describe "$fex")" ;;
     missing) ;;
   esac
-  [[ -d $work/stage ]] && ok "build staged: $(describe "$work/stage")" || warn "nothing staged: frame-vrc setup (downloads it) or frame-vrc build"
-  [[ -n $(valve_backup) ]] && ok "Valve backup: $(basename "$(valve_backup)")" || ok "no Valve backup yet (made on the first switch)"
-  echo "DFR"
+  [[ -d $work/stage ]] && row ok "" "build staged: $(describe "$work/stage")" || row warn "" "nothing staged (fex eac and setup download it)"
+  [[ -n $(valve_backup) ]] && row ok "" "Valve backup: $(basename "$(valve_backup)")" || row ok "" "no Valve backup yet (made on the first switch)"
+  section DFR
   if [[ $(cfg PROTON) == dfr ]]; then
-    [[ -f $dfr_pkg/VERSION ]] && ok "package: $(cat "$dfr_pkg/VERSION")" || fail "no DFR package: frame-vrc proton dfr URL|FILE"
+    [[ -f $dfr_pkg/VERSION ]] && row ok "" "package: $(cat "$dfr_pkg/VERSION")" || row fail "proton dfr" "no DFR package"
     if [[ -d $dfr_dir ]]; then
-      cmp -s "$dfr_dir/version" "$proton_exp/version" && ok "Proton copy matches Proton Experimental" ||
-        warn "Steam updated Proton Experimental since the copy: frame-vrc proton dfr (copies it again)"
-    else fail "no Proton copy: frame-vrc proton dfr"; fi
-    [[ -f $HOME/.config/openvr/openvrpaths.vrpath ]] && ok "OpenVR path registry" || warn "no ~/.config/openvr/openvrpaths.vrpath: start SteamVR once"
+      cmp -s "$dfr_dir/version" "$proton_exp/version" && row ok "" "Proton copy matches Proton Experimental" ||
+        row warn "proton dfr" "Steam updated Proton Experimental since the copy (copies it again)"
+    else row fail "proton dfr" "no Proton copy"; fi
+    [[ -f $HOME/.config/openvr/openvrpaths.vrpath ]] && row ok "" "OpenVR path registry" || row warn "" "no ~/.config/openvr/openvrpaths.vrpath: start SteamVR once"
   else
-    ok "off (proton stock)"
+    row ok "" "off (proton stock)"
   fi
+  if $json; then (IFS=,; echo "[${rows[*]}]"); return $bad; fi
   ((bad == 0)) && echo "all set" || { echo "fix the FAIL lines above"; return 1; }
 }
 
@@ -269,22 +323,39 @@ cmd_setup() {
       *) fexsrc=$1; shift ;;
     esac
   done
+  step() { echo "==> [$1/7] $2"; }
+  step 1 "Checking what Steam has installed"
   local d
   for d in FEX-Emu "Proton - Experimental" "Proton EasyAntiCheat Runtime"; do
     [[ -d "$apps/common/$d" ]] || { cmd_install_deps; die "confirm the installs in Steam, then run frame-vrc setup again"; }
+    echo "ok: $d"
   done
   [[ -f "$apps/common/$name/$name.exe" && $(compat_tool) =~ ^(proton_experimental|$dfr_tool)$ ]] ||
     die "in Steam set $name > Properties > Compatibility > Proton Experimental and let it download the Windows build, then run frame-vrc setup again"
+  echo "ok: $name (Windows build)"
+  step 2 "Downloading the patched FEX"
   if [[ -n $fexsrc ]]; then
     cmd_fetch "$fexsrc"
   elif [[ ! -d $work/stage ]]; then
     local url; url=$(latest_asset 'fex-eac-.*-steamframe-aarch64\.tar\.gz') || die "no FEX package in the latest $repo release: frame-vrc setup URL|FILE, or frame-vrc build"
     cmd_fetch "$url"
+  else
+    echo "already downloaded: $(describe "$work/stage")"
   fi
+  step 3 "Installing the patched FEX (Valve's build is backed up)"
   cmd_fex eac
-  if [[ $dfrsrc == none ]]; then cmd_proton stock; else cmd_proton dfr ${dfrsrc:+"$dfrsrc"}; fi
+  if [[ $dfrsrc == none ]]; then
+    step 4 "Proton Experimental (no DFR)"
+    cmd_proton stock
+  else
+    step 4 "DFR Proton: download the DFR DXVK, copy Proton Experimental, restart Steam if new"
+    cmd_proton dfr ${dfrsrc:+"$dfrsrc"}
+  fi
+  step 5 "Render resolution $res"
   (cmd_resolution "$res") || echo "frame-vrc: start SteamVR and run: frame-vrc resolution $res" >&2
+  step 6 "Launch options"
   cmd_launch_options set
+  step 7 "Checking everything"
   cmd_doctor
 }
 
@@ -354,7 +425,12 @@ cmd_fex() {
       local b; b=$(valve_backup); echo "Valve backup: ${b:+${b##*/}}${b:-none}" ;;
     eac | patched)
       [[ $s == eac ]] && { echo "already eac: $(describe "$fex")"; return; }
-      [[ -d $work/stage ]] || die "no eac build in $work/stage: frame-vrc setup, fetch or build"
+      # nothing built or fetched yet: the latest release's package (as setup does)
+      if [[ ! -d $work/stage ]]; then
+        local url; url=$(latest_asset 'fex-eac-.*-steamframe-aarch64\.tar\.gz') ||
+          die "no eac build in $work/stage and none in the latest $repo release: frame-vrc fetch URL|FILE, or build"
+        cmd_fetch "$url"
+      fi
       # Installing over a foreign eac build with no backup would keep that build as the "Valve" backup.
       [[ $s == patched-other && -z $(valve_backup) ]] &&
         die "a foreign eac build is installed and there is no Valve backup: reinstall FEX-Emu in Steam first"
@@ -436,10 +512,13 @@ EOF
 
 # Steam lists compatibility tools at start: a new one needs a Steam restart before it can be chosen.
 steam_restart() {
-  echo "restarting Steam so it sees the new Proton (SteamVR restarts with it) ..."
+  echo "Steam must restart once so it sees the new Proton. SteamVR restarts with it: in the headset the view goes away"
+  echo "for about a minute, then comes back; this keeps running. Open frame-vrc again to see the rest."
+  local s; for s in 10 8 6 4 2; do echo "restarting Steam in $s s ..."; sleep 2; done
+  echo "restarting Steam now"
   steamapi restart >/dev/null || true
   sleep 15
-  local i; for i in $(seq 1 40); do steamapi ping >/dev/null 2>&1 && return 0; sleep 5; done
+  local i; for i in $(seq 1 40); do steamapi ping >/dev/null 2>&1 && { echo "Steam is back"; return 0; }; sleep 5; done
   die "Steam did not come back; start it and run frame-vrc proton dfr again"
 }
 
@@ -517,6 +596,26 @@ cmd_tune() {
   esac
 }
 
+# Several settings in one go (the VR panel collects taps and sends them together): the launch options are rebuilt
+# once, not once per setting. apply resolution=N dfr=LEVEL cpus=N dxvk-threads=N vram=MB
+cmd_apply() {
+  local kv k v msgs=()
+  for kv; do
+    k=${kv%%=*} v=${kv#*=}
+    case $k in
+      resolution) cmd_resolution "$v" >/dev/null; msgs+=("resolution $v") ;;
+      dfr) [[ $v =~ ^(auto|off|def|wide|ext)$ ]] || die "dfr: auto|off|def|wide|ext"; cfg_set DFR "$v"; msgs+=("dfr $v") ;;
+      cpus | dxvk-threads | vram)
+        [[ $v =~ ^[0-9]+$ ]] || die "$k: a number"
+        case $k in cpus) cfg_set CPUS "$v" ;; dxvk-threads) cfg_set DXVK_THREADS "$v" ;; vram) cfg_set VRAM "$v" ;; esac
+        msgs+=("$k $v") ;;
+      *) die "usage: frame-vrc apply resolution=N dfr=LEVEL cpus=N dxvk-threads=N vram=MB" ;;
+    esac
+  done
+  apply_opts
+  echo "set: $(IFS=,; echo "${msgs[*]}" | sed 's/,/, /g'); applies the next time the game starts"
+}
+
 cmd_launch_options() {
   local op=${1:-show} prev=$data/launch-options.$appid.prev cur
   cur=$(opts_get)
@@ -540,9 +639,16 @@ cmd_launch_options() {
 }
 
 # ---- commands: play, measure, undo ----------------------------------------------------------------------------
+# Through Steam's client API (as its Play button). Not "steam steam://... &": started from the VR panel, this runs in a
+# systemd unit, and systemd stops a backgrounded helper when we exit, before it passes the URL on. Then waits for
+# the game's launch to show up (Steam's reaper with AppId=438100, or VRChat.exe).
 cmd_launch() {
-  steam "steam://rungameid/$appid" >/dev/null 2>&1 &
-  echo "asked Steam to start $name"
+  launching() { pgrep -x VRChat.exe >/dev/null || pgrep -f "AppId=$appid( |$)" >/dev/null; }
+  launching && { echo "$name is already running"; return; }
+  echo "asking Steam to start $name ..."
+  steamapi run "$appid" >/dev/null 2>&1 || timeout 30 steam "steam://rungameid/$appid" >/dev/null 2>&1 || true
+  local i; for i in $(seq 1 20); do launching && { echo "$name is starting (the first world join takes a few minutes)"; return; }; sleep 1; done
+  die "Steam did not start $name: start it from the Steam library"
 }
 
 cmd_bench() {
@@ -584,6 +690,16 @@ cmd_bench() {
   echo "saved: $out (raw samples: $log)"
 }
 
+# The latest release through get.sh (the same as a new install; settings and packages are kept).
+cmd_update() {
+  curl -fsSL "https://raw.githubusercontent.com/$repo/main/get.sh" | bash
+}
+
+cmd_panel() {
+  [[ -x $here/frame-vrc-panel ]] || die "the VR panel is not built (install.sh builds it; needs cmake, ninja, g++)"
+  exec "$here/frame-vrc-panel" --show "$@"
+}
+
 cmd_uninstall() {
   local purge=false
   [[ "${1:-}" == --purge ]] && purge=true
@@ -592,7 +708,9 @@ cmd_uninstall() {
   rm -rf "$dfr_dir" "$dfr_dir.new"
   if ours "$(opts_get 2>/dev/null || true)"; then cmd_launch_options clear; fi
   if [[ -f $data/resolution.$appid.prev ]]; then (cmd_resolution reset) || echo "frame-vrc: start SteamVR and run: frame-vrc resolution reset" >&2; fi
-  rm -f "$HOME/.local/bin/frame-vrc"
+  rm -f "$HOME/.local/bin/frame-vrc" "$HOME/.local/share/applications/frame-vrc.desktop"
+  # a panel opened from the app list (when the panel started this, it runs detached and carries on)
+  pkill -TERM -x frame-vrc-panel 2>/dev/null || true
   if $purge; then
     [[ $(fex_state) == valve ]] || die "FEX is not Valve's build; not removing $work"
     rm -rf "$work" "$data"
@@ -609,19 +727,22 @@ usage() {
 frame-vrc $VERSION: PC VRChat on the Steam Frame (patched FEX, optional foveated rendering)
   frame-vrc setup                   everything with the recommended settings: patched FEX, DFR Proton,
                                     resolution 1920, launch options (--no-dfr, --resolution N, --dfr URL|FILE)
-  frame-vrc status                  what is set now
+  frame-vrc panel                   open the VR panel (SteamVR dashboard) - all of this without typing
+  frame-vrc status [--json]         what is set now
   frame-vrc fex valve|eac           Valve's FEX / the patched FEX (EAC needs eac)
   frame-vrc proton stock|dfr        Proton Experimental / its copy with the DFR DXVK (dfr [URL|FILE]: the package)
   frame-vrc resolution 1056|1440|1920
                                     performance / balanced / quality (SteamVR's own UI starts at 1440)
-  frame-vrc dfr auto|off|def        foveated rendering; auto = on (def) from 1600 up
+  frame-vrc dfr auto|off|def        foveated rendering; auto = on (def) from 1440 up
   frame-vrc launch                  start $name
-  frame-vrc doctor                  check everything, say what to fix
+  frame-vrc doctor [--json]         check everything, say what to fix
+  frame-vrc update                  install the latest release (settings are kept)
   frame-vrc uninstall [--purge]     back to Valve's FEX, Proton Experimental, your launch options and resolution
 advanced
   frame-vrc resolution 1600|2160|N  any render resolution 360-4096
   frame-vrc dfr wide|ext            coarser periphery (ext: for 2160 and up)
   frame-vrc tune [cpus N|dxvk-threads N|vram MB|reset]   built-in 16 / 4 / 1024
+  frame-vrc apply resolution=N dfr=LEVEL cpus=N ...      several settings at once
   frame-vrc install-deps            ask Steam to install FEX-Emu, Proton Experimental, EAC Runtime
   frame-vrc build [--jobs N] | fetch URL|FILE | pack      the patched FEX: build it here / use a package / make one
   frame-vrc launch-options show|set|clear
@@ -634,14 +755,17 @@ cmd=${1:-help}
 shift || true
 case $cmd in
   setup) cmd_setup "$@" ;;
-  status) cmd_status ;;
+  status) cmd_status "$@" ;;
   fex | switch) cmd_fex "$@" ;;  # switch: the 0.5 name
   proton) cmd_proton "$@" ;;
   resolution) cmd_resolution "$@" ;;
   dfr) cmd_dfr "$@" ;;
   tune) cmd_tune "$@" ;;
+  apply) cmd_apply "$@" ;;
   launch) cmd_launch ;;
-  doctor) cmd_doctor ;;
+  doctor) cmd_doctor "$@" ;;
+  update) cmd_update ;;
+  panel) cmd_panel "$@" ;;
   install-deps) cmd_install_deps ;;
   build) cmd_build "$@" ;;
   fetch) cmd_fetch "$@" ;;

@@ -9,6 +9,7 @@ Measurements: [research/summary.zh-CN.md](research/summary.zh-CN.md) (Chinese).
 
 | Version | Date | What changed |
 |---|---|---|
+| 0.7.0 | 2026-11-06 | DFR `auto` now on from 1440 (was 1600). VR panel: **frame-vrc** in SteamVR's app list (built on the headset by the installer): what is set, an environment check with a fix button per problem (installs in Steam, FEX, Proton, launch options), the recommended setup, resolution, DFR, launch, the advanced switches, a Monitor page (memory, swap, CPU per core, temperature, VRChat's memory and CPU), a Log page with every step of setup, English or Japanese; setting taps are applied together (`frame-vrc apply`). `setup` prints numbered steps and warns 10 s before the one SteamVR restart; `launch` starts the game through Steam's client API and checks that it started; `fex eac` downloads the package itself. `status --json`, `doctor --json`, `update`, `panel`; `install-deps` also installs VRChat (set to Proton Experimental first). |
 | 0.6.1 | 2026-11-06 | DFR on a new install: the eye-tracking bridge's folder is created first (without it the bridge could not write gaze data and DFR stayed at full rate). |
 | 0.6.0 | 2026-11-06 | Foveated rendering (DFR): `proton stock\|dfr` (a copy of Proton Experimental with ji10me's DFR DXVK), `dfr auto\|off\|def` (auto = on from 1600), the eye-tracking bridge started with the game (`lib/dfr-run`). Recommended setup: 1920 + DFR. Switches simplified (`fex`, `proton`, `resolution`, `dfr`, `tune`), settings in one file, `status` and `launch`. Desktop mirror window 640×480 by default. Vulkan thunk build removed. |
 | 0.5.3 | 2026-11-05 | FEX's code cache only for VRChat and the EAC launcher: Wine helpers ~640 MB less, no fps loss. |
@@ -24,7 +25,8 @@ Measurements: [research/summary.zh-CN.md](research/summary.zh-CN.md) (Chinese).
   shader-heavy world, within noise in a light one; saves GPU time, not memory). DFR's DLLs must go in Proton's own DXVK
   folder: next to `VRChat.exe` the game crashes in Wine's loader.
 - **Does not:** the Vulkan thunk (crashes in VR when SteamVR's x86 client submits a frame; desktop only, −10% CPU);
-  FEX TSO off (crash in ~35 s); HalfBarrier TSO off (no gain); Mesa's VRAM cap (native side only); DFR at 1440 (no gain);
+  FEX TSO off (crash in ~35 s); HalfBarrier TSO off (no gain); Mesa's VRAM cap (native side only); DFR at 1440 in the benchmark (fps within noise, yet it helps in play, so
+  `auto` turns it on from 1440 since 0.7.0);
   coarser DFR (`ext` no faster than `def` at 1920).
 - **Limits:** memory (SteamVR, Steam's UI and tracking take ~7 of 16 GB) and CPU (FEX translating x86: ~20 ms per frame
   at 1056, ~35–40 ms at 1920 in a heavy world). SteamVR paces the game at half or a third of 72 Hz.

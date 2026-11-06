@@ -29,10 +29,11 @@ Proton Experimental 本体は一切変更しません。DFR は複製を使い�
 | 内容 | 場所 | 削除方法 |
 |---|---|---|
 | ツール本体 | `~/.local/lib/frame-vrc`、`~/.local/bin/frame-vrc` | `frame-vrc uninstall` |
+| VR パネルのアプリ一覧の項目 | `~/.local/share/applications/frame-vrc.desktop`（パネル本体は `~/.local/lib/frame-vrc`） | `frame-vrc uninstall` |
 | **Valve 版 FEX のバックアップ**（残しておく） | `~/fex-eac-work/valve-backup/FEX-<バージョン>/` | `uninstall --purge`（Valve 版に戻した後だけ） |
 | パッチ版 FEX（ヘッドセットでビルドした場合はソースも） | `~/fex-eac-work/`（`stage`、`stage.prev`、`FEX`、`build-*`、`build.log`） | `uninstall --purge` |
 | DFR 版 Proton（Proton Experimental の複製に DFR 版 DXVK を入れたもの。元のファイルは `dxvk-orig/`） | `~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr/`（約 1.5 GB） | `frame-vrc uninstall`、または `proton stock` の後にフォルダを削除 |
-| 設定、DFR パッケージ、ブリッジのログ、ベンチマークレポート | `~/.local/share/frame-vrc/`（`config`、`dfr/`、`bridge.log`、`bench/`、`dist/`） | `uninstall --purge`、または削除 |
+| 設定、DFR パッケージ、ブリッジのログ、ベンチマークレポート | `~/.local/share/frame-vrc/`（`config`、`dfr/`、`bridge.log`、`bench/`、`dist/`、`panel/`：パネルの最後の操作とその出力） | `uninstall --purge`、または削除 |
 | ブリッジの視線ファイル | `~/.local/share/frame-pcvr/gaze/frame-gaze-v1.bin`（64 バイト、ブリッジ停止時に空になる） | フォルダを削除 |
 
 ## プレイ中に作られるもの（Steam、FEX、Proton が作る。frame-vrc ではない）

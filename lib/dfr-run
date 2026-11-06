@@ -5,11 +5,12 @@
 data=$HOME/.local/share/frame-vrc
 pkg=$data/dfr
 level=$(sed -n 's/^DFR=//p' "$data/config" 2>/dev/null | tail -1)
-# auto: on from 1600 up (no gain measured at 1440, +15-25% fps at 1920 in a heavy world). Same rule as frame-vrc.
+# auto: on from 1440 up (+15-25% fps at 1920 in a heavy world; at 1440 within noise in the benchmark but it helps in
+# play). Same rule as frame-vrc.
 if [[ ${level:-auto} == auto ]]; then
   res=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("steam.app.438100", {}).get("resolutionOverride", 0))' \
     "$HOME/.config/openvr/config/steamvr.vrsettings" 2>/dev/null || echo 0)
-  ((res >= 1600)) && level=def || level=off
+  ((res >= 1440)) && level=def || level=off
 fi
 # Radius of the full-rate circle / of the 2x2 ring (fractions of an eye's shorter side), periphery rate (10 = 4x4).
 case $level in

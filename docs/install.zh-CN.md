@@ -53,7 +53,7 @@ bridge 在 Linux ARM64 上对 OpenVR SDK `0924064` 编译，链接时加 `-Wl,-r
 
 ## 4. DFR 怎么运行
 
-用 DFR 版 Proton 时，VRChat 的启动选项会以 `…/lib/dfr-run` 开头。它在游戏之前原生运行：按选的级别（`frame-vrc dfr`；`auto` = 分辨率 1600 起自动开）
+用 DFR 版 Proton 时，VRChat 的启动选项会以 `…/lib/dfr-run` 开头。它在游戏之前原生运行：按选的级别（`frame-vrc dfr`；`auto` = 分辨率 1440 起自动开）
 设好 DXVK 的 DFR 变量，并启动眼动 bridge；bridge 等 VRChat 拿到 VR 场景后开始工作，随游戏退出（日志：`~/.local/share/frame-vrc/bridge.log`）。
 没戴头显时注视点数据无效，DXVK 按全速着色。
 
