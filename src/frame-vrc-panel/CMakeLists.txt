@@ -1,7 +1,7 @@
 # frame-vrc-panel: SteamVR dashboard panel for frame-vrc. MIT License (see LICENSE; the frameeyeosc helpers:
 # src/third_party_frameeyeosc/LICENSE.frameeyeosc; OpenVR header: third_party/openvr/LICENSE).
 cmake_minimum_required(VERSION 3.16)
-project(frame-vrc-panel VERSION 0.7.0 LANGUAGES CXX)
+project(frame-vrc-panel VERSION 0.7.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

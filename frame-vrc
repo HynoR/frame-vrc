@@ -3,7 +3,7 @@
 # (StonkGuy/FEX, eac-* tag), optionally with foveated rendering (DFR). Other EAC games are not a goal and untested.
 # Runs as user steamos, never sudo, writes only under $HOME; every change has an undo. See README.md.
 set -euo pipefail
-VERSION=0.7.0
+VERSION=0.7.1
 repo=HynoR/frame-vrc
 here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 lib=$here/lib
@@ -106,7 +106,9 @@ set_compat_tool() {
 # instead of 16 the lowest free memory in VR fell from ~700 to 260 MB (2026-11-03). The ids are this machine's, repeated.
 launch_options() {
   local n cpus ids=() i
-  n=$(nproc) cpus=$(cfg CPUS)
+  # All of the headset's cores: plain nproc counts only those the caller may use, and SteamOS keeps processes started
+  # through systemd-run (the VR panel) on cores 0-4 - the game then lost the fast cores 5-7 (0.7.0, fixed in 0.7.1).
+  n=$(nproc --all) cpus=$(cfg CPUS)
   while ((${#ids[@]} < cpus)); do
     for ((i = 0; i < n && ${#ids[@]} < cpus; i++)); do ids+=("$i"); done
   done

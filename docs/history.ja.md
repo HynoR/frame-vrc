@@ -9,6 +9,7 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat �
 
 | バージョン | 日付 | 変更点 |
 |---|---|---|
+| 0.7.1 | 2026-11-06 | 修正：VR パネルから書き込んだ起動オプションが、ゲームの CPU を 0〜4 番コアだけに割り当てていた（SteamOS は `systemd-run` で起動したプロセスをそこに制限する）。VRChat が高速な 5〜7 番コアを使えず遅くなっていた。CPU の一覧は常に 8 コアすべてを含むように。 |
 | 0.7.0 | 2026-11-06 | DFR の `auto` を 1440 からオンに（以前は 1600）。VR パネル：SteamVR のアプリ一覧の **frame-vrc**（インストール時にヘッドセットでビルド）。現在の設定、環境チェック（問題ごとに修正ボタン：Steam でのインストール、FEX、Proton、起動オプション）、推奨設定、解像度、DFR、ゲーム起動、詳細スイッチ、モニターページ（メモリ、スワップ、コアごとの CPU、温度、VRChat のメモリと CPU）、ログページ（setup の各ステップ）、英語・日本語の表示。設定のタップはまとめて適用（`frame-vrc apply`）。`setup` は番号付きのステップを表示し、SteamVR の再起動前に知らせて 10 秒待つ。`launch` は Steam のクライアント API でゲームを起動し、起動したか確認。`fex eac` はパッケージを自分でダウンロード。`status --json`、`doctor --json`、`update`、`panel` を追加。`install-deps` は VRChat もインストール（先に Proton Experimental に設定）。 |
 | 0.6.1 | 2026-11-06 | 新規インストールでの DFR：視線ブリッジのフォルダを先に作る（ないとブリッジが視線データを書けず、DFR がずっとフルレートのままだった）。 |
 | 0.6.0 | 2026-11-06 | フォービエイテッドレンダリング（DFR）：`proton stock\|dfr`（Proton Experimental の複製に ji10me の DFR 版 DXVK）、`dfr auto\|off\|def`（auto = 1600 以上でオン）、ゲームと一緒に起動する視線ブリッジ（`lib/dfr-run`）。推奨構成：1920 + DFR。スイッチを整理（`fex`、`proton`、`resolution`、`dfr`、`tune`）、設定は 1 ファイルに、`status` と `launch` を追加。デスクトップのミラーウィンドウは既定で 640×480。Vulkan thunk ビルドを削除。 |
