@@ -9,6 +9,7 @@ Measurements: [research/summary.zh-CN.md](research/summary.zh-CN.md) (Chinese).
 
 | Version | Date | What changed |
 |---|---|---|
+| 0.6.1 | 2026-11-06 | DFR on a new install: the eye-tracking bridge's folder is created first (without it the bridge could not write gaze data and DFR stayed at full rate). |
 | 0.6.0 | 2026-11-06 | Foveated rendering (DFR): `proton stock\|dfr` (a copy of Proton Experimental with ji10me's DFR DXVK), `dfr auto\|off\|def` (auto = on from 1600), the eye-tracking bridge started with the game (`lib/dfr-run`). Recommended setup: 1920 + DFR. Switches simplified (`fex`, `proton`, `resolution`, `dfr`, `tune`), settings in one file, `status` and `launch`. Desktop mirror window 640×480 by default. Vulkan thunk build removed. |
 | 0.5.3 | 2026-11-05 | FEX's code cache only for VRChat and the EAC launcher: Wine helpers ~640 MB less, no fps loss. |
 | 0.5.2 | 2026-11-05 | `FEX_MAXINST=500` by default (−0.65 GB game memory, −1.9 GB zram, ~−10% fps). Fixes from a clean-install test. |

@@ -9,6 +9,7 @@
 
 | 版本 | 日期 | 改动 |
 |---|---|---|
+| 0.6.1 | 2026-11-06 | 新安装时的 DFR：先创建眼动 bridge 的文件夹（没有它 bridge 写不了注视点数据，DFR 一直是全速着色）。 |
 | 0.6.0 | 2026-11-06 | 注视点渲染（DFR）：`proton stock\|dfr`（Proton Experimental 的副本，换上 ji10me 的 DFR 版 DXVK）、`dfr auto\|off\|def`（auto = 1600 起自动开）、眼动 bridge 随游戏启动（`lib/dfr-run`）。推荐配置：1920 + DFR。开关简化（`fex`、`proton`、`resolution`、`dfr`、`tune`），设置存在一个文件里，新增 `status` 和 `launch`。桌面镜像窗口默认 640×480。删掉 Vulkan thunk 版本。 |
 | 0.5.3 | 2026-11-05 | FEX 代码缓存只给 VRChat 和 EAC 启动器：Wine 辅助进程少约 640 MB，帧数不变。 |
 | 0.5.2 | 2026-11-05 | 默认 `FEX_MAXINST=500`（游戏内存 −0.65 GB、zram −1.9 GB、帧数约 −10%）。干净安装测试发现的修复。 |

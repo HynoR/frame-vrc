@@ -9,6 +9,7 @@ Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat �
 
 | バージョン | 日付 | 変更点 |
 |---|---|---|
+| 0.6.1 | 2026-11-06 | 新規インストールでの DFR：視線ブリッジのフォルダを先に作る（ないとブリッジが視線データを書けず、DFR がずっとフルレートのままだった）。 |
 | 0.6.0 | 2026-11-06 | フォービエイテッドレンダリング（DFR）：`proton stock\|dfr`（Proton Experimental の複製に ji10me の DFR 版 DXVK）、`dfr auto\|off\|def`（auto = 1600 以上でオン）、ゲームと一緒に起動する視線ブリッジ（`lib/dfr-run`）。推奨構成：1920 + DFR。スイッチを整理（`fex`、`proton`、`resolution`、`dfr`、`tune`）、設定は 1 ファイルに、`status` と `launch` を追加。デスクトップのミラーウィンドウは既定で 640×480。Vulkan thunk ビルドを削除。 |
 | 0.5.3 | 2026-11-05 | FEX のコードキャッシュを VRChat と EAC ランチャーだけに：Wine の補助プロセスが約 640 MB 減、フレームレートは変わらず。 |
 | 0.5.2 | 2026-11-05 | `FEX_MAXINST=500` を既定に（ゲームのメモリ −0.65 GB、zram −1.9 GB、フレームレート約 −10%）。クリーンインストールのテストで見つかった修正。 |

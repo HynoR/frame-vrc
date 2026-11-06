@@ -24,6 +24,8 @@ export DXVK_GAZE_VRS=1 DXVK_GAZE_FILE="Z:${HOME//\//\\}\\.local\\share\\frame-pc
 # It needs VRChat to own the VR scene, so it is retried until then; it ends after its time limit, when it loses the
 # scene, or when the game exits, and is started again while the game runs. Own session: Steam does not wait for it.
 if [[ -x $pkg/frame-gaze-bridge ]]; then
+  # The bridge makes its own gaze/ folder (private), but only inside an existing parent.
+  mkdir -p "$HOME/.local/share/frame-pcvr"
   setsid bash -c '
     cd "$1" || exit
     unset LD_PRELOAD  # Steam overlay libraries meant for the game, not for the bridge
