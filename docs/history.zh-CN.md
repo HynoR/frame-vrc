@@ -9,7 +9,7 @@
 
 | 版本 | 日期 | 改动 |
 |---|---|---|
-| 0.7.1 | 2026-11-06 | 修复：从 VR 面板写入的启动选项把游戏的 CPU 只映射到 0-4 号核心（SteamOS 把通过 `systemd-run` 启动的进程限制在这几个核心），VRChat 用不到 5-7 号大核，帧数变低。现在 CPU 列表始终覆盖全部 8 个核心。`cpus` 只接受 8、16、32（8 的倍数才能均匀映射到所有核心；少于 8 会漏掉大核）。 |
+| 0.7.1 | 2026-11-06 | 修复：从 VR 面板写入的启动选项把游戏的 CPU 只映射到 0-4 号核心（SteamOS 把通过 `systemd-run` 启动的进程限制在这几个核心），VRChat 用不到 5-7 号大核，帧数变低。现在 CPU 列表始终覆盖全部 8 个核心。`cpus` 只接受 8、16、32（8 的倍数才能均匀映射到所有核心；少于 8 会漏掉大核）。重测 8 和 16（1920 + DFR、重负载世界、5 轮有效）：帧数（16-20）和内存都没有明显差别，默认保持 16。 |
 | 0.7.0 | 2026-11-06 | DFR `auto` 改为 1440 起开启（原来 1600）。VR 面板：SteamVR 应用列表里的 **frame-vrc**（安装时在头显上编译）：当前设置、环境检查（每个问题一个修复按钮：在 Steam 里安装、FEX、Proton、启动选项）、推荐配置、分辨率、DFR、启动游戏、高级开关、监控页（内存、swap、每核 CPU、温度、VRChat 的内存和 CPU），日志页（setup 的每一步），英文或日文界面；设置类按钮合并后一次应用（`frame-vrc apply`）。`setup` 输出带编号的步骤，SteamVR 重启前提示并等 10 秒；`launch` 通过 Steam 客户端 API 启动并确认游戏已启动；`fex eac` 会自己下载包。新增 `status --json`、`doctor --json`、`update`、`panel`；`install-deps` 也会安装 VRChat（先设成 Proton Experimental）。 |
 | 0.6.1 | 2026-11-06 | 新安装时的 DFR：先创建眼动 bridge 的文件夹（没有它 bridge 写不了注视点数据，DFR 一直是全速着色）。 |
 | 0.6.0 | 2026-11-06 | 注视点渲染（DFR）：`proton stock\|dfr`（Proton Experimental 的副本，换上 ji10me 的 DFR 版 DXVK）、`dfr auto\|off\|def`（auto = 1600 起自动开）、眼动 bridge 随游戏启动（`lib/dfr-run`）。推荐配置：1920 + DFR。开关简化（`fex`、`proton`、`resolution`、`dfr`、`tune`），设置存在一个文件里，新增 `status` 和 `launch`。桌面镜像窗口默认 640×480。删掉 Vulkan thunk 版本。 |
