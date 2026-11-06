@@ -276,3 +276,38 @@ VR 5 分钟（同 a1 的方法；注意 a1/a1r 是 720，c1/c1r 是 1056，分�
 
 结论：**辅助进程少约 640 MB（同为 1056 的 A/B），进世界时间不变，EAC 正常**；分辨率更高的 c1r 帧数也不低于 720 的 a1，没有看到帧数损失。放进 frame-vrc 0.5.3 默认启动选项。
 旧实验留下的 DiskCache 文件（别的 FEX 设置的）不会再用到，可以删整个 `fex-emu` 文件夹让它重建。
+
+## 待研究（2026-11-06 记下，还没实测）
+
+### 桌面镜像窗口
+
+VR 模式下 VRChat 还会把一只眼的画面缩放到桌面窗口（默认 1024×768 窗口模式，存在 prefix 的 `user.reg`，`Screenmanager Resolution *`），
+gamescope（`--backend openvr`）再把它作为覆盖层交给 SteamVR。每帧多一次 DXVK present，走模拟的 x86 Mesa → Xwayland。
+VRChat 没有关闭镜像的参数（Unity 的 `XRSettings.gameViewRenderMode` 只能靠 mod，和 EAC 冲突），只能缩小：
+`%command% -screen-width 640 -screen-height 360 -screen-fullscreen 0`。用户体感 640×480 就有小改进，360p 在试。
+待做：1024×768 vs 640×360 的 bench 对比；有收益就进默认启动选项。
+
+### 社区的注视点渲染 DXVK（[ji10me/dxvk-steam-frame-dfr](https://github.com/ji10me/dxvk-steam-frame-dfr)）
+
+DXVK 用 `VK_KHR_fragment_shading_rate` 的附件按注视点降低外围着色率，眼动数据由一个原生 ARM64 的 OpenVR Background 程序写进文件。
+补上了 eac 无 thunk 方案缺的注视点渲染（Valve 的 `fdm_injection` 层只有 aarch64，见步骤 4）。
+
+- 已在 Mac 上编好（Debian 容器 + mingw-w64 posix；bridge 用 bookworm arm64，glibc 2.36），源码看过：只读环境变量和一个注视点文件。
+- **不能放 prefix**：Proton 每次启动都会删掉并重新复制 `system32` 里的 d3d11/dxgi（`proton` 脚本的 `try_copy`）。
+  打算放进 VRChat 游戏目录（Wine 找 native DLL 先查程序目录）；未知：EAC 会不会拒绝。被拒就做一份私有 Proton。
+- 先测 `DXVK_GAZE_VRS=1 DXVK_GAZE_FAKE=fixed DXVK_GAZE_DEBUG=1`（固定注视点，不用 bridge）：EAC、x86 Turnip 是否支持附件 VRS、画面和 fps。
+- 环境变量能到 DXVK（`DXVK_CONFIG` 已证明），README 说的 FEX 转发问题在这条路径上不存在。
+- 预期：省的是 GPU；1056 时卡在 CPU（20 / 15.5 ms），收益可能小，1440 更可能有用。着色率图的线程在 FEX 里跑，也吃 CPU。
+
+### 视频硬件解码
+
+作者下一步要做视频处理的硬件化。VRChat 的播放器（AVPro、Unity VideoPlayer）走 MediaFoundation → winegstreamer → x86 GStreamer 软解，
+整条在 FEX 里模拟，和游戏抢 CPU。我们的测试都在没视频的 home 世界，这块成本没量过。
+
+- 可能的捷径：硬件解码器是 V4L2（`/dev/video*`，ioctl），64 位 x86 程序在 FEX 下 ioctl 基本直通，
+  x86 GStreamer 的 `v4l2h264dec` 之类也许能直接用硬件，不需要原生桥。
+- 难度：摸底约 1 天（内核驱动、容器里能不能打开设备、支持的格式、FEX 下 `gst-launch` 试解）；
+  插件中等（Proton 的 GStreamer 可能不带 v4l2，要按同版本编 x86 插件并让 winegstreamer 优先选）；
+  画面回传中到高（NV12 在模拟代码里转换或拷贝会吃回 CPU，零拷贝要 dmabuf → Vulkan）；
+  格式和稳定性最难（HEVC / VP9 / AV1、直播流、拖动进度、多个播放器同时开、硬件会话上限、出错退回软解），要几周。
+- 先做：有视频播放器的世界里跑 bench，量软解占多少 CPU，作为对照基线。
