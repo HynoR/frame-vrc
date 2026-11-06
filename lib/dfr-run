@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Steam runs this in front of the game when frame-vrc's DFR Proton is chosen (launch options: ... dfr-run %command%).
+# It runs natively, outside FEX: sets the DFR variables for the chosen level, starts the eye-tracking bridge next to
+# the game, then becomes the game (exec), so Steam tracks the game as before.
+data=$HOME/.local/share/frame-vrc
+pkg=$data/dfr
+level=$(sed -n 's/^DFR=//p' "$data/config" 2>/dev/null | tail -1)
+# auto: on from 1600 up (no gain measured at 1440, +15-25% fps at 1920 in a heavy world). Same rule as frame-vrc.
+if [[ ${level:-auto} == auto ]]; then
+  res=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1])).get("steam.app.438100", {}).get("resolutionOverride", 0))' \
+    "$HOME/.config/openvr/config/steamvr.vrsettings" 2>/dev/null || echo 0)
+  ((res >= 1600)) && level=def || level=off
+fi
+# Radius of the full-rate circle / of the 2x2 ring (fractions of an eye's shorter side), periphery rate (10 = 4x4).
+case $level in
+  def) gaze="" ;;
+  wide) gaze="DXVK_GAZE_COARSE=10 DXVK_GAZE_R1=0.2 DXVK_GAZE_R2=0.35" ;;
+  ext) gaze="DXVK_GAZE_COARSE=10 DXVK_GAZE_R1=0.1 DXVK_GAZE_R2=0.1" ;;
+  *) exec "$@" ;;
+esac
+export DXVK_GAZE_VRS=1 DXVK_GAZE_FILE="Z:${HOME//\//\\}\\.local\\share\\frame-pcvr\\gaze\\frame-gaze-v1.bin" $gaze
+
+# The bridge reads the headset's per-eye gaze through OpenVR (as a background app) and writes it where DXVK reads it.
+# It needs VRChat to own the VR scene, so it is retried until then; it ends after its time limit, when it loses the
+# scene, or when the game exits, and is started again while the game runs. Own session: Steam does not wait for it.
+if [[ -x $pkg/frame-gaze-bridge ]]; then
+  setsid bash -c '
+    cd "$1" || exit
+    unset LD_PRELOAD  # Steam overlay libraries meant for the game, not for the bridge
+    export VR_PATHREG_OVERRIDE=$HOME/.config/openvr/openvrpaths.vrpath
+    seen=0
+    for _ in $(seq 1 120); do pgrep -x VRChat.exe >/dev/null && { seen=1; break; }; sleep 5; done
+    ((seen)) || exit
+    while p=$(pgrep -x VRChat.exe | head -1) && [[ -n $p ]]; do
+      ./frame-gaze-bridge "$p" 1800 --flip-y
+      sleep 10
+    done' dfr-bridge "$pkg" </dev/null >"$data/bridge.log" 2>&1 &
+fi
+exec "$@"

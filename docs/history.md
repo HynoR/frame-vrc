@@ -1,79 +1,37 @@
-# History and findings
+# History
 
 **English** · [中文](history.zh-CN.md) · [日本語](history.ja.md)
 
 One Steam Frame (SteamOS 0.4.5 vr, Snapdragon 8 Gen 3, 16 GB), VRChat Windows build on Proton Experimental.
-Raw notes: [research/](research/) (Chinese).
+Measurements: [research/summary.zh-CN.md](research/summary.zh-CN.md) (Chinese).
 
-## Timeline
+## Versions
 
-### 2026-11-03: VRChat with EAC runs in VR
+| Version | Date | What changed |
+|---|---|---|
+| 0.6.0 | 2026-11-06 | Foveated rendering (DFR): `proton stock\|dfr` (a copy of Proton Experimental with ji10me's DFR DXVK), `dfr auto\|off\|def` (auto = on from 1600), the eye-tracking bridge started with the game (`lib/dfr-run`). Recommended setup: 1920 + DFR. Switches simplified (`fex`, `proton`, `resolution`, `dfr`, `tune`), settings in one file, `status` and `launch`. Desktop mirror window 640×480 by default. Vulkan thunk build removed. |
+| 0.5.3 | 2026-11-05 | FEX's code cache only for VRChat and the EAC launcher: Wine helpers ~640 MB less, no fps loss. |
+| 0.5.2 | 2026-11-05 | `FEX_MAXINST=500` by default (−0.65 GB game memory, −1.9 GB zram, ~−10% fps). Fixes from a clean-install test. |
+| 0.5.0–0.5.1 | 2026-11-05 | `setup` does the whole install; one-line installer (`get.sh`). |
+| 0.4.0 | 2026-11-05 | Renamed from frame-eac: the point is PC VRChat, not EAC games in general. |
+| 0.3.0 | 2026-11-05 | DXVK 1 GB VRAM report + 4 compiler threads (−15% CPU), tabtip off (−135 MB); `resolution`; SteamVR fps in benchmarks; docs in three languages. |
+| 0.1–0.2 | 2026-11-03 | First run: steamac's patched FEX built on the headset; EAC `301` / `Session Begin: Success`; VRChat plays in VR. |
 
-- steamac's `fex-eac` (patched FEX for EAC under Proton, proven on a Mac) built on the headset: ~5 min with 4 jobs,
-  ~2 GB, up to ~98 C. Swapped into Steam's FEX-Emu with a backup of Valve's files; every step had an undo.
-- Launch options set through Steam's own API (CEF debug port) instead of typing them in VR.
-- Result: EAC `Launcher finished with: 301`, `AntiCheat Session Begin: Success`, worlds entered **in VR**. First join
-  ~3 min (FEX code cache cold), later ~20 s.
-- Baseline (VR, 1440): game CPU ~280% (100% = one core), game memory (PSS) 4.4 GB average / 5.4 GB peak, GPU memory
-  ~2.2 GB, available memory down to ~0.7 GB, zram full, ~94 C.
-- Vulkan thunks (native Vulkan instead of emulated): both Valve's prebuilt thunk and one built from the eac FEX left
-  the game stuck while loading.
-- `WINE_CPU_TOPOLOGY` 16 vs 8: no clear difference (different worlds).
-- frame-vrc 0.1–0.2: switch between Valve / eac / thunk builds, launch options, benchmark sampler.
+## Findings in short
 
-### 2026-11-05: thunk diagnosis, desktop mode, VR memory and frame rate
-
-- **Thunk cause 1, fixed:** the native Vulkan loader got the container's x86 driver list (a path only the emulated
-  side sees) and found no driver. `FEX_HOSTENV=VK_DRIVER_FILES=<json>` points it at the host's Turnip.
-- **Thunk cause 2, left to FEX/Valve:** in VR the game crashes as SteamVR's x86 vrclient submits the first frame
-  through the thunk. Fixing it means changing FEX's thunk ABI code.
-- **Desktop mode works** with and without the thunk; picture correct; the thunk saved ~10% CPU, no memory.
-- **VR memory and frame rate** (home world, alone, 5 min each, automated):
-
-  | Run | Change | fps | game GPU memory | zram peak | lowest available |
-  |---|---|---|---|---|---|
-  | A–C | baseline (VRAM cap experiments that turned out inactive) | ~20 | ~2.4 GB | ~7.5 GB | ~0.8 GB |
-  | D | DXVK 1 GB VRAM + 4 compiler threads, tabtip off | ~20, CPU −15% | 2.4 GB | 7.4 GB | 1.1 GB |
-  | E | D + resolution 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
-  | F | D + resolution 720 | 36 (SteamVR stats) | 1.8 GB | 6.5 GB | 1.1 GB |
-
-- frame-vrc 0.5.2: `FEX_MAXINST=500` in the default launch options; 1056 is the recommended resolution.
-- frame-vrc 0.5.3: FEX's code cache only for VRChat and the EAC launcher (`FEX_APP_CONFIG`): Wine helpers ~640 MB less,
-  no fps loss (35.3 fps at 1056, vs 33.9 for MaxInst=500 alone at 720).
-- frame-vrc 0.5.2 (also): `setup` and `switch` no longer stop silently on a new install (no Valve backup yet); `doctor` and
-  `resolution` no longer stop silently without Steam's config or SteamVR. Found by the clean-install test.
-- The installer (`get.sh`) is fetched from the repository instead of the release, so fixes to it need no new release;
-  it still installs only released versions.
-- frame-vrc 0.5.1: the one-line installer (`get.sh`) no longer exits with an error after a successful install.
-- frame-vrc 0.5.0: `setup` does the whole install in one command; `switch` also fills in empty launch options.
-- Renamed from frame-eac to **frame-vrc** (0.4.0): the point is playing PC VRChat, not EAC games in general.
-- frame-vrc 0.3.0: D's settings by default, `resolution` command, SteamVR fps in benchmarks, thunk build packaging,
-  `fetch` from a file, docs in three languages.
-
-## Findings
-
-- **Render resolution is the biggest lever.** SteamVR's settings stop at 1440; `vrcmd` (and `frame-vrc resolution`)
-  goes lower; SteamVR rounds to multiples of 32 (1080 → 1056).
-- **CPU and GPU are both close to the limit.** At 1056: ~20 ms CPU and ~15 ms GPU per frame; SteamVR paces the game
-  at 36 or 24 fps (27.7 ms needed for 36). The CPU time is mostly FEX translating x86 code.
-- **VRAM the game sees:** Steam's Mesa VRAM cap only works on the native side; under `eac` Unity sees the real
-  14683 MB. DXVK's `dxgi.maxDeviceMemory` does work.
-- **FEX options (VRChat only, through `FEX_*` launch options):** Steam gives VRChat no FEX tuning (FEX defaults). TSO off
-  crashes VRChat within ~35 s; HalfBarrier TSO off gains nothing; `MaxInst=500` (Valve's value for Proton ARM64) saves
-  ~0.65 GB of game memory and ~1.9 GB of zram for ~10% fewer fps (both run orders), so it is now the default.
-- **DXVK compiler threads** follow the reported CPU count (16); 4 cut CPU by ~15%.
-- **Foveated rendering:** SteamOS's `VK_LAYER_VALVE_fdm_injection` exists only for aarch64, so the emulated game gets
-  none. With the thunk it loads; that is why the VR thunk crash matters.
-- **Where memory goes:** with only SteamVR running ~8.7 of 16 GB are free. Steam's UI (~1.5 GB + 1.4 GB in zram),
-  the SteamVR dashboard (~0.7 GB) and XRService (~0.7 GB) are needed in VR. In the game, every Wine helper process
-  carried ~135 MB, about half of it FEX's allocator. That part was each process's own copy of the FEX code cache index
-  (one per set of FEX settings, up to 124 MB); with the cache only for the game, 14 helpers went from 973 to 333 MB.
-- **Measuring:** reading a game's full `/proc/<pid>/smaps` makes it stutter; frame-vrc's sampler uses `smaps_rollup`.
-  `vrcmd --stats` gives the game's frame counts and CPU/GPU time per frame.
+- **Works:** the patched FEX (EAC fails without it); the default options above; DFR at 1920 (+15–25% fps in a
+  shader-heavy world, within noise in a light one; saves GPU time, not memory). DFR's DLLs must go in Proton's own DXVK
+  folder: next to `VRChat.exe` the game crashes in Wine's loader.
+- **Does not:** the Vulkan thunk (crashes in VR when SteamVR's x86 client submits a frame; desktop only, −10% CPU);
+  FEX TSO off (crash in ~35 s); HalfBarrier TSO off (no gain); Mesa's VRAM cap (native side only); DFR at 1440 (no gain);
+  coarser DFR (`ext` no faster than `def` at 1920).
+- **Limits:** memory (SteamVR, Steam's UI and tracking take ~7 of 16 GB) and CPU (FEX translating x86: ~20 ms per frame
+  at 1056, ~35–40 ms at 1920 in a heavy world). SteamVR paces the game at half or a third of 72 Hz.
+- **Measuring:** reading a game's full `/proc/<pid>/smaps` makes it stutter (the sampler uses `smaps_rollup`); turn the
+  headset's sleep off for unattended runs (standby pauses rendering and stalls logins).
 
 ## Open questions
 
-1. The 1 GB VRAM report and VRChat's avatar limits in busy worlds.
-2. How much a headset restart frees in Steam's UI processes.
-3. The VR thunk crash (upstream). An OpenVR-to-OpenXR layer (e.g. xrizer) in place of SteamVR's x86 vrclient might
-   avoid it; untested, and EAC rules out changing game files.
+1. Memory in busy worlds at 1920 (alone in a heavy world ~1.5 GB stays free).
+2. Hardware video decoding for world video players (now software, emulated).
+3. How much a headset restart frees in Steam's UI processes.

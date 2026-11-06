@@ -2,100 +2,77 @@
 
 [English](install.md) · **中文** · [日本語](install.ja.md)
 
-所有操作都在 Frame 上做（Konsole 或 SSH），用普通用户（`steamos`）。不要用 sudo。
+所有操作都在 Frame 上（Konsole 或 SSH），以普通用户（`steamos`）运行。不要用 sudo。
 
-## 1. 前提条件（所有方式都要）
+## 1. 前提条件
 
-1. 在 Steam 里安装 **FEX-Emu**（库 > 工具）、**Proton Experimental** 和 **Proton EasyAntiCheat Runtime**。
-   装好 frame-vrc 后，`frame-vrc install-deps` 会为每个缺的项目打开 Steam 的安装确认。
-2. **VRChat > 属性 > 兼容性 > Proton Experimental。** 不设的话 Steam 装的是 Android 版。让 Steam 下载 Windows 版。
-3. 第一次设置时让头显插着电；头显休眠会断开 SSH。
+1. 在 Steam 里安装 **Proton Experimental** 和 **Proton EasyAntiCheat Runtime**（没有 **FEX-Emu** 的话也装上：库 > 工具）。
+   装好 frame-vrc 后，`frame-vrc install-deps` 会为每个缺的组件打开 Steam 的安装确认。
+2. **VRChat > 属性 > 兼容性 > Proton Experimental。** 不设的话 Steam 会装 Android 版。让 Steam 下载 Windows 版。
+3. 先启动一次 SteamVR（frame-vrc 通过它设渲染分辨率）。第一次设置时头显插着电。
 
 ## 2. 安装 frame-vrc
 
-二选一：
-
 ```sh
-# a) 从 GitHub 安装：装的是最新的 release（会自己校验 SHA256SUMS）
+# a) 从 GitHub：安装最新 release（自己校验 SHA256SUMS）
 curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 
-# b) 用下载好的 frame-vrc-<version>.tar.gz（比如 Discord 上的）：先校验再安装
-sha256sum -c --ignore-missing SHA256SUMS        # 在放着压缩包和 SHA256SUMS 的文件夹里
-tar xzf frame-vrc-<version>.tar.gz && sh frame-vrc-<version>/install.sh
+# b) 用下载好的 frame-vrc-<版本>.tar.gz：先校验再安装
+sha256sum -c --ignore-missing SHA256SUMS        # 在放 tarball 和 SHA256SUMS 的文件夹里
+tar xzf frame-vrc-<版本>.tar.gz && sh frame-vrc-<版本>/install.sh
 ```
 
-装到 `~/.local/lib/frame-vrc`，链接为 `~/.local/bin/frame-vrc`。如果提示找不到 `frame-vrc`，开一个新的终端或者用 `~/.local/bin/frame-vrc`。
+装到 `~/.local/lib/frame-vrc`，链接为 `~/.local/bin/frame-vrc`（找不到 `frame-vrc` 就开个新 shell）。
 
-## 一条命令
-
-装好 frame-vrc 后，`frame-vrc setup --resolution 1056` 会自己做完下面的第 1、3、4 部分（前提条件、最新 release 的 FEX 包、切换、启动选项、分辨率、doctor）。
-要用别的包就给它地址或文件：`frame-vrc setup ~/Downloads/fex-<version>-steamframe-aarch64.tar.gz`。下面几部分是同样的步骤，一步一步来。
-
-## 3. 获取补丁版 FEX
-
-### 方式 A：用打包好的（推荐）
-
-把 `fex-<version>-steamframe-aarch64.tar.gz` **和**它的 `.sha256` 下载到同一个文件夹，或者直接给 release 地址：
+## 3. 设置
 
 ```sh
-frame-vrc fetch ~/Downloads/fex-<version>-steamframe-aarch64.tar.gz      # Discord 上下载的文件
-frame-vrc fetch https://github.com/.../fex-<version>-steamframe-aarch64.tar.gz   # release 里的文件
+frame-vrc setup             # 推荐：补丁版 FEX、DFR 版 Proton、1920 + DFR、测过的参数
+frame-vrc setup --no-dfr    # 不要 DFR：原版 Proton Experimental
+frame-vrc launch            # 或者在 Steam 里启动 VRChat（VR 模式）
 ```
 
-校验和不对、或者里面的 FEX 跑不起来，`fetch` 都会拒绝，之前的版本留作 `stage.prev`。`-thunk-` 包用法一样（可选，只能桌面模式）。
+Steam 里缺东西时 `setup` 会停下并说明要做什么；做完再运行一次。它从最新 release 下载两个包，每个都用 `.sha256` 校验：
 
-### 方式 B：在头显上编译
+| 包 | 内容 | 不下载的话 |
+|---|---|---|
+| `fex-eac-<版本>-steamframe-aarch64.tar.gz` | 补丁版 FEX | `frame-vrc setup 文件` 或 `frame-vrc fetch 文件`；或在头显上编译：`frame-vrc build`（约 5 分钟，会很热，到 100 °C 自动停） |
+| `dfr-dxvk-<提交>-steamframe.tar.gz` | DFR 版 DXVK（`d3d11.dll`、`dxgi.dll`）、眼动 bridge 和它的 OpenVR 库 | `frame-vrc setup --dfr 文件` 或 `frame-vrc proton dfr 文件`；或自己编译（见下） |
 
-```sh
-frame-vrc build              # 4 个线程约 5 分钟，在 ~/fex-eac-work 里占约 2 GB
-```
+从别处拿的包，把它的 `.sha256` 放在旁边。
 
-头显会很热（实测最高约 98°C）；到 100°C 会自动停，再运行一次会接着编。插着电、别戴在头上。
+第一次 `proton dfr` 会把 Proton Experimental 复制到 `~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr`（约 1.5 GB），换掉其中的 DXVK，
+并重启一次 Steam 让它认出这份副本。Steam 更新 Proton Experimental 后 `doctor` 会提示，再运行一次 `frame-vrc proton dfr` 就会重新复制。
 
-### 方式 C：完全手动（不用 frame-vrc）
+### 自己编译 DFR 包
 
-1. 解压一个包：`mkdir -p ~/fex-eac-work && sha256sum -c fex-*.sha256 && tar xzf fex-*.tar.gz -C ~/fex-eac-work`
-   （得到 `~/fex-eac-work/stage`）。
-2. 退出所有游戏（FEXServer 不能在运行：`pgrep -x FEXServer` 没有输出）。
-3. 用 steamac 的脚本换上（本仓库里也有，`lib/install-fex-tool.sh`），它会先备份 Valve 的文件：
-   `sh install-fex-tool.sh`（`status` 看装的是哪个，`restore` 换回 Valve 的）。
-4. 把下面的启动选项粘贴到 VRChat > 属性 > 启动选项。
-5. 可选的分辨率：`/opt/steamvr/bin/linuxarm64/vrcmd --settings-int steam.app.438100.resolutionOverride`
-   （记下原值），然后 `--set-settings-int steam.app.438100.resolutionOverride 1056`（最吃紧时用 720）。
+按 [ji10me/dxvk-steam-frame-dfr](https://github.com/ji10me/dxvk-steam-frame-dfr) 的说明编译（DXVK 用 MinGW-w64：
+`meson setup build-frame --cross-file build-win64.txt --buildtype release -Denable_d3d8=false -Denable_d3d9=false -Denable_d3d10=false`；
+bridge 在 Linux ARM64 上对 OpenVR SDK `0924064` 编译，链接时加 `-Wl,-rpath,'$ORIGIN'`），再用本仓库的
+`tools/make-dfr-package.sh DXVK源码 OPENVR_SDK` 打包。
 
-## 4. 切换和设置
+## 4. DFR 怎么运行
 
-```sh
-frame-vrc switch eac             # 备份 Valve 的 FEX，装上补丁版
-frame-vrc launch-options set     # 通过 Steam 自己的 API 设置；`show` 会打印出来让你自己粘贴
-frame-vrc resolution 1056        # 可选；720 只在最吃紧时用；`reset` 恢复原值
-frame-vrc doctor
-```
+用 DFR 版 Proton 时，VRChat 的启动选项会以 `…/lib/dfr-run` 开头。它在游戏之前原生运行：按选的级别（`frame-vrc dfr`；`auto` = 分辨率 1600 起自动开）
+设好 DXVK 的 DFR 变量，并启动眼动 bridge；bridge 等 VRChat 拿到 VR 场景后开始工作，随游戏退出（日志：`~/.local/share/frame-vrc/bridge.log`）。
+没戴头显时注视点数据无效，DXVK 按全速着色。
 
-frame-vrc 给 `eac` 版本设置的启动选项：
+## 5. 手动（不用 frame-vrc）
 
-```text
-env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 FEX_APP_CONFIG=$HOME/.local/lib/frame-vrc/lib/fex-vrchat.json EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
-```
+1. 解开 FEX 包（得到 `~/fex-eac-work/stage`），退出所有游戏（`pgrep -x FEXServer` 没有输出），运行 `sh lib/install-fex-tool.sh`
+   （`restore` 换回 Valve 的文件）。
+2. 粘贴启动选项（在装了工具的机器上用 `frame-vrc launch-options show` 打印），除非按 ji10me 的说明配好了 DFR，否则去掉 `…/dfr-run`。
+3. 分辨率：`/opt/steamvr/bin/linuxarm64/vrcmd --set-settings-int steam.app.438100.resolutionOverride 1920`
+   （先用 `--settings-int steam.app.438100.resolutionOverride` 记下原值）。
 
-各部分的作用：`EAC_LAUNCHERDIR` / `PROTON_EAC_RUNTIME` 让 EAC 用 Valve 的运行时；`WINE_CPU_TOPOLOGY` 报 16 个 CPU（VRChat 按这个数决定线程池大小）；
-`DXVK_CONFIG` 报 1 GB 显存、用 4 个着色器编译线程；`tabtip.exe=d` 去掉 Wine 的触屏键盘（约 135 MB）；`FEX_MAXINST=500` 让 FEX 按更小的块翻译，
-是 Valve 在 Proton ARM64 上自己用的值（游戏内存约 −0.65 GB、zram 约 −1.9 GB，帧数约 −10%）；`FEX_APP_CONFIG` 指向工具自带的
-[lib/fex-vrchat.json](../lib/fex-vrchat.json)，只给 VRChat 和 EAC 启动器开 FEX 代码缓存（不然每个 Wine 辅助进程都各自载入一份约 50 MB 的缓存索引，合计约 640 MB；
-不用工具时把这个文件复制到别处并改路径）；`PROTON_USE_XALIA=0` 和 `WINEDEBUG=-all` 关掉无障碍和日志的开销。
+## 6. 省内存的 VRChat 设置
 
-`thunk` 版本用 `frame-vrc switch thunk`，启动选项会自动改（Vulkan thunk 开关、驱动修正、`--no-vr`）：见 [thunk-build.zh-CN.md](thunk-build.zh-CN.md)。
+在 VRChat 里（设置，在 VR 中）：隐藏 Poor / Very Poor 模型，调低模型下载和解压大小上限，调低最多显示的模型数，打开粒子限制，镜子调低或关掉。
+玩之前重启头显能让 Steam 界面的进程重新开始。
 
-## 5. 省内存的 VRChat 设置
+## 7. 确认能用
 
-VRChat 里（设置，在 VR 里改）：隐藏 Poor / Very Poor 的模型，调低模型下载大小和解压大小上限，减少最多显示的模型数，打开粒子限制，
-镜子低画质或关掉。人多的世界里占满内存的是别人的模型。玩之前重启头显，Steam 界面的进程会重新开始，占得少一些。
+`frame-vrc doctor` 最后应该是 `all set`。要记录一次：先运行 `frame-vrc bench` 再启动游戏；`~/.local/share/frame-vrc/bench/` 里的报告会写明 EAC 是否启动
+（`Launcher finished with: 301`、`AntiCheat Session Begin: Success`）。游戏起不来的话，在启动选项里临时加一次 `PROTON_LOG=1`，看 `~/steam-438100.log`。
 
-## 6. 检查是否正常
-
-在 Steam 里以 VR 模式启动 VRChat。第一次进世界约 3 分钟（FEX 在翻译并缓存代码），之后约 20 秒。要记录一局：先运行 `frame-vrc bench` 再启动游戏；
-报告在 `~/.local/share/frame-vrc/bench/`，会写明 EAC 有没有启动（`Launcher finished with: 301`、`AntiCheat Session Begin: Success`）。
-
-启动不了的话，在启动选项里加一次 `PROTON_LOG=1`，然后看 `~/steam-438100.log`。
-
-全部撤销：[changes.zh-CN.md](changes.zh-CN.md)。
+全部恢复：[changes.zh-CN.md](changes.zh-CN.md)。

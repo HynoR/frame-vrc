@@ -1,73 +1,35 @@
-# 経緯とわかったこと
+# 履歴
 
 [English](history.md) · [中文](history.zh-CN.md) · **日本語**
 
-Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat Windows 版、Proton Experimental。生の記録：[research/](research/)（中国語）。
+Steam Frame 1 台（SteamOS 0.4.5 vr、Snapdragon 8 Gen 3、16 GB）、VRChat の Windows 版を Proton Experimental で。
+測定結果：[research/summary.zh-CN.md](research/summary.zh-CN.md)（中国語）。
 
-## 時系列
+## バージョン
 
-### 2026-11-03：EAC 付きの VRChat が VR で動いた
+| バージョン | 日付 | 変更点 |
+|---|---|---|
+| 0.6.0 | 2026-11-06 | フォービエイテッドレンダリング（DFR）：`proton stock\|dfr`（Proton Experimental の複製に ji10me の DFR 版 DXVK）、`dfr auto\|off\|def`（auto = 1600 以上でオン）、ゲームと一緒に起動する視線ブリッジ（`lib/dfr-run`）。推奨構成：1920 + DFR。スイッチを整理（`fex`、`proton`、`resolution`、`dfr`、`tune`）、設定は 1 ファイルに、`status` と `launch` を追加。デスクトップのミラーウィンドウは既定で 640×480。Vulkan thunk ビルドを削除。 |
+| 0.5.3 | 2026-11-05 | FEX のコードキャッシュを VRChat と EAC ランチャーだけに：Wine の補助プロセスが約 640 MB 減、フレームレートは変わらず。 |
+| 0.5.2 | 2026-11-05 | `FEX_MAXINST=500` を既定に（ゲームのメモリ −0.65 GB、zram −1.9 GB、フレームレート約 −10%）。クリーンインストールのテストで見つかった修正。 |
+| 0.5.0–0.5.1 | 2026-11-05 | `setup` 1 コマンドでインストール。1 行インストーラー（`get.sh`）。 |
+| 0.4.0 | 2026-11-05 | frame-eac から改名：目的は PC 版 VRChat で、EAC ゲーム全般ではない。 |
+| 0.3.0 | 2026-11-05 | DXVK の VRAM 報告 1 GB + コンパイルスレッド 4（CPU −15%）、tabtip オフ（−135 MB）、`resolution`、ベンチマークに SteamVR のフレームレート、3 言語のドキュメント。 |
+| 0.1–0.2 | 2026-11-03 | 最初の実行：steamac のパッチ版 FEX をヘッドセットでビルド。EAC `301` / `Session Begin: Success`。VRChat が VR で遊べる。 |
 
-- steamac の `fex-eac`（Proton 上で EAC を動かすためのパッチ版 FEX、Mac で実証済み）をヘッドセット上でビルド：4 ジョブで約 5 分、約 2 GB、
-  最大約 98°C。Valve のファイルをバックアップしてから Steam の FEX-Emu に入れ替え。すべての手順に戻し方を用意。
-- 起動オプションは VR 内で入力せず、Steam 自身の API（CEF デバッグポート）で設定。
-- 結果：EAC `Launcher finished with: 301`、`AntiCheat Session Begin: Success`、**VR で**ワールドに入場。最初の入場は約 3 分（FEX のコード
-  キャッシュが空）、以降は約 20 秒。
-- ベースライン（VR、1440）：ゲーム CPU 約 280%（100% = 1 コア）、ゲームのメモリ（PSS）平均 4.4 GB／最大 5.4 GB、GPU メモリ約 2.2 GB、
-  空きメモリ最低約 0.7 GB、zram 満杯、約 94°C。
-- Vulkan thunk（エミュレーションの代わりにネイティブの Vulkan）：Valve のビルド済みも eac 版 FEX からビルドしたものも、ロード中に止まった。
-- `WINE_CPU_TOPOLOGY` 16 対 8：はっきりした差なし（ワールドが違う）。
-- frame-vrc 0.1–0.2：Valve / eac / thunk ビルドの切り替え、起動オプション、ベンチマーク。
+## 要点
 
-### 2026-11-05：thunk の診断、デスクトップモード、VR のメモリと fps
+- **効果あり：** パッチ版 FEX（ないと EAC が起動しない）、上の既定の設定、1920 での DFR（シェーダーが重いワールドでフレームレート +15〜25%、軽いワールドではノイズの範囲。
+  GPU 時間は減るがメモリは減らない）。DFR の DLL は Proton 自身の DXVK フォルダに置く必要があり、`VRChat.exe` の隣に置くと Wine のローダーで落ちます。
+- **効果なし：** Vulkan thunk（VR で SteamVR の x86 クライアントがフレームを渡すと落ちる。デスクトップのみで CPU −10%）、FEX の TSO オフ（約 35 秒で落ちる）、
+  HalfBarrier TSO オフ（効果なし）、Mesa の VRAM 上限（ネイティブ側のみ）、1440 での DFR（効果なし）、より粗い DFR（1920 で `ext` は `def` より速くない）。
+- **限界：** メモリ（SteamVR、Steam の画面、トラッキングで 16 GB のうち約 7 GB）と CPU（FEX による x86 の翻訳：1056 で 1 フレーム約 20 ms、
+  重いワールドの 1920 で約 35〜40 ms）。SteamVR はゲームを 72 Hz の半分か 3 分の 1 で動かします。
+- **測定：** ゲームの `/proc/<pid>/smaps` 全体を読むとカクつく（サンプラーは `smaps_rollup` を使う）。無人で測るときはヘッドセットのスリープを切る
+  （スタンバイで描画が止まり、ログインも止まる）。
 
-- **thunk の原因 1、修正済み：** ネイティブの Vulkan ローダーが、コンテナが x86 向けに用意したドライバ一覧（エミュレーション側からしか
-  見えないパス）を受け取り、ドライバが見つからなかった。`FEX_HOSTENV=VK_DRIVER_FILES=<json>` でホストの Turnip を指定。
-- **thunk の原因 2、FEX/Valve に任せる：** VR では SteamVR の x86 vrclient が thunk 経由で最初のフレームを渡すときにゲームがクラッシュ。
-  修正には FEX の thunk ABI のコード変更が必要。
-- **デスクトップモード**は thunk の有無にかかわらず動作、描画正常。thunk で CPU 約 10% 減、メモリは変わらず。
-- **VR のメモリと fps**（ホームワールド、一人、各 5 分、自動化）：
+## 未解決
 
-  | 回 | 変更 | fps | ゲーム GPU メモリ | zram 最大 | 空きメモリ最低 |
-  |---|---|---|---|---|---|
-  | A–C | ベースライン（VRAM 上限の実験。実際はどれも無効だった） | 約 20 | 約 2.4 GB | 約 7.5 GB | 約 0.8 GB |
-  | D | DXVK で VRAM 1 GB と報告 + コンパイル 4 スレッド、tabtip 無効 | 約 20、CPU −15% | 2.4 GB | 7.4 GB | 1.1 GB |
-  | E | D + 解像度 1056 | 29 | 2.1 GB | 7.2 GB | 0.9 GB |
-  | F | D + 解像度 720 | 36（SteamVR の統計） | 1.8 GB | 6.5 GB | 1.1 GB |
-
-- frame-vrc 0.5.2：デフォルトの起動オプションに `FEX_MAXINST=500`。推奨解像度を 1056 に。
-- frame-vrc 0.5.3：FEX のコードキャッシュを VRChat と EAC ランチャーだけに（`FEX_APP_CONFIG`）。Wine の補助プロセスが約 640 MB 減り、fps は下がらない（1056 で 35.3、MaxInst=500 だけのときは 720 で 33.9）。
-- frame-vrc 0.5.2（ほか）：新規インストール（Valve のバックアップがまだない）で `setup` と `switch` が無言で止まらなくなった。Steam の設定や SteamVR がないときの `doctor` と `resolution` も同様。クリーンインストールのテストで発見。
-- インストーラ（`get.sh`）はリリースではなくリポジトリから取得するようにし、修正に新しいリリースが不要に。インストールされるのは引き続き公開済みのバージョンのみ。
-- frame-vrc 0.5.1：ワンライナーのインストーラ（`get.sh`）が、インストール成功後にエラーで終了しなくなった。
-- frame-vrc 0.5.0：`setup` でインストール全体をコマンド一つで。`switch` は起動オプションが空のときも自動で設定。
-- frame-eac から **frame-vrc** に改名（0.4.0）：目的は PC 版 VRChat を遊ぶことで、EAC のゲーム全般ではない。
-- frame-vrc 0.3.0：D の設定をデフォルトに、`resolution` コマンド、ベンチマークに SteamVR の fps、thunk ビルドのパッケージ化、
-  `fetch` でローカルファイル、3 言語のドキュメント。
-
-## わかったこと
-
-- **描画解像度が一番効く。** SteamVR の設定画面は 1440 が下限だが、`vrcmd`（と `frame-vrc resolution`）ならさらに下げられる。SteamVR は
-  32 の倍数に丸める（1080 → 1056）。
-- **CPU も GPU も限界に近い。** 1056 で 1 フレームあたり CPU 約 20 ms、GPU 約 15 ms。SteamVR はゲームを 36 または 24 fps で刻む（36 には
-  27.7 ms 以内が必要）。CPU 時間の大半は FEX による x86 コードの変換。
-- **ゲームから見える VRAM：** Steam の Mesa による VRAM 上限はネイティブ側でしか効かず、`eac` では Unity に実際の 14683 MB が見える。
-  DXVK の `dxgi.maxDeviceMemory` は効く。
-- **FEX のオプション（VRChat のみ、起動オプションの `FEX_*` で）：** Steam は VRChat に FEX の調整をしていない（FEX のデフォルトのまま）。TSO を切ると
-  約 35 秒でクラッシュ、HalfBarrier TSO を切っても効果なし。`MaxInst=500`（Valve が Proton ARM64 で使う値）でゲームのメモリ約 −0.65 GB、zram 約 −1.9 GB、
-  fps 約 −10%（順番を入れ替えても同じ）。デフォルトに採用。
-- **DXVK のコンパイルスレッド**は報告された CPU 数（16）に従う。4 にすると CPU が約 15% 減。
-- **フォービエイテッドレンダリング：** SteamOS の `VK_LAYER_VALVE_fdm_injection` は aarch64 版しかないため、エミュレーションで動くゲームには
-  効かない。thunk なら読み込まれる。VR の thunk クラッシュが重要なのはこのため。
-- **メモリの使い道：** SteamVR だけの状態で 16 GB 中約 8.7 GB が空き。Steam の UI（約 1.5 GB + zram に 1.4 GB）、SteamVR ダッシュボード
-  （約 0.7 GB）、XRService（約 0.7 GB）は VR で必要。ゲーム中は Wine の補助プロセスがそれぞれ約 135 MB、その半分ほどが FEX のアロケータ。
-  中身は各プロセスが読み込む FEX コードキャッシュの索引（FEX の設定ごとに 1 つ、最大 124 MB）。キャッシュをゲームだけにすると 14 個の補助プロセスが 973 MB から 333 MB に。
-- **測定の注意：** ゲームの `/proc/<pid>/smaps` 全体を読むとカクつく。frame-vrc のサンプラーは `smaps_rollup` を使う。
-  `vrcmd --stats` でゲームのフレーム数と 1 フレームあたりの CPU/GPU 時間がわかる。
-
-## 未解決の課題
-
-1. 人の多いワールドでの 1 GB VRAM 報告と VRChat のアバター制限の効果。
-2. ヘッドセットの再起動で Steam の UI プロセスがどれだけ減るか。
-3. VR の thunk クラッシュ（上流）。SteamVR の x86 vrclient の代わりに OpenVR→OpenXR の変換レイヤー（xrizer など）を使えば回避できるかも
-   しれない。未検証。EAC があるのでゲームファイルは変更できない。
+1. 1920 で人の多いワールドのメモリ（重いワールドに 1 人で約 1.5 GB 残る）。
+2. ワールドの動画プレイヤーのハードウェアデコード（現在はエミュレーションのソフトウェアデコード）。
+3. ヘッドセットの再起動で Steam の画面のプロセスがどれだけ減るか。

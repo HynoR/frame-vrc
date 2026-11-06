@@ -4,112 +4,83 @@
 
 Everything runs on the Frame, in Konsole or over SSH, as the normal user (`steamos`). Never use sudo.
 
-## 1. Prerequisites (all methods)
+## 1. Prerequisites
 
-1. In Steam, install **FEX-Emu** (Library > Tools), **Proton Experimental** and **Proton EasyAntiCheat Runtime**.
-   With frame-vrc installed, `frame-vrc install-deps` opens Steam's install prompt for each missing one.
+1. In Steam, install **Proton Experimental** and **Proton EasyAntiCheat Runtime** (and **FEX-Emu**, Library > Tools,
+   if it is missing). With frame-vrc installed, `frame-vrc install-deps` opens Steam's install prompt for each.
 2. **VRChat > Properties > Compatibility > Proton Experimental.** Without this Steam installs the Android build. Let
    Steam download the Windows build.
-3. Keep the headset on power for a first setup; SSH drops when it goes to sleep.
+3. Start SteamVR once (frame-vrc sets the render resolution through it). Keep the headset on power for the first setup.
 
 ## 2. Install frame-vrc
-
-Pick one:
 
 ```sh
 # a) from GitHub: installs the latest release (checks SHA256SUMS itself)
 curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 
-# b) from a downloaded frame-vrc-<version>.tar.gz (e.g. from Discord): check it, then install
+# b) from a downloaded frame-vrc-<version>.tar.gz: check it, then install
 sha256sum -c --ignore-missing SHA256SUMS        # in the folder with the tarball and SHA256SUMS
 tar xzf frame-vrc-<version>.tar.gz && sh frame-vrc-<version>/install.sh
 ```
 
-It goes to `~/.local/lib/frame-vrc`, linked as `~/.local/bin/frame-vrc`. If `frame-vrc` is not found, open a new
-shell or use `~/.local/bin/frame-vrc`.
+It goes to `~/.local/lib/frame-vrc`, linked as `~/.local/bin/frame-vrc` (open a new shell if `frame-vrc` is not found).
 
-## One command
-
-After installing frame-vrc, `frame-vrc setup --resolution 1056` does sections 1, 3 and 4 below by itself (prerequisites,
-the latest release's FEX package, switch, launch options, resolution, doctor). Give it a URL or file to use another
-package: `frame-vrc setup ~/Downloads/fex-<version>-steamframe-aarch64.tar.gz`. The sections below are the same steps
-one at a time.
-
-## 3. Get the patched FEX
-
-### Method A: prebuilt package (recommended)
-
-Download `fex-<version>-steamframe-aarch64.tar.gz` **and** its `.sha256` into the same folder, or give the release URL:
+## 3. Setup
 
 ```sh
-frame-vrc fetch ~/Downloads/fex-<version>-steamframe-aarch64.tar.gz      # a file from Discord
-frame-vrc fetch https://github.com/.../fex-<version>-steamframe-aarch64.tar.gz   # a release asset
+frame-vrc setup             # recommended: patched FEX, DFR Proton, 1920 + DFR, the tested options
+frame-vrc setup --no-dfr    # without DFR: stock Proton Experimental
+frame-vrc launch            # or start VRChat from Steam, in VR
 ```
 
-`fetch` refuses the package if the checksum does not match or the FEX in it does not run, and keeps the previous
-build as `stage.prev`. The `-thunk-` package works the same way (optional, desktop only).
+`setup` stops and says what to do when something is missing in Steam; do that and run it again. It downloads two
+packages from the latest release, each checked against its `.sha256`:
 
-### Method B: build on the headset
+| Package | What | Instead of downloading |
+|---|---|---|
+| `fex-eac-<version>-steamframe-aarch64.tar.gz` | the patched FEX | `frame-vrc setup FILE` or `frame-vrc fetch FILE`; or build it on the headset: `frame-vrc build` (~5 min, gets hot, stops itself at 100 C) |
+| `dfr-dxvk-<commit>-steamframe.tar.gz` | the DFR DXVK (`d3d11.dll`, `dxgi.dll`), the eye-tracking bridge and its OpenVR library | `frame-vrc setup --dfr FILE` or `frame-vrc proton dfr FILE`; or build it yourself (below) |
 
-```sh
-frame-vrc build              # ~5 min with 4 jobs, ~2 GB in ~/fex-eac-work
-```
+When a package comes from elsewhere, put its `.sha256` next to it.
 
-The headset gets hot (up to ~98 C measured); the build stops itself at 100 C, and running it again continues.
-Keep it on power and off your head.
+The first `proton dfr` copies Proton Experimental to `~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr`
+(~1.5 GB), swaps its DXVK and restarts Steam once so it lists the copy. When Steam updates Proton Experimental,
+`doctor` says so; `frame-vrc proton dfr` copies it again.
 
-### Method C: fully by hand (no frame-vrc)
+### Building the DFR package yourself
 
-1. Unpack a package: `mkdir -p ~/fex-eac-work && sha256sum -c fex-*.sha256 && tar xzf fex-*.tar.gz -C ~/fex-eac-work`
-   (gives `~/fex-eac-work/stage`).
-2. Quit every game (FEXServer must not run: `pgrep -x FEXServer` prints nothing).
-3. Swap it in with steamac's script (also in this repo as `lib/install-fex-tool.sh`); it backs up Valve's files first:
-   `sh install-fex-tool.sh` (`status` shows what is installed, `restore` puts Valve's files back).
-4. Paste the launch options below into VRChat > Properties > Launch Options.
-5. Optional resolution: `/opt/steamvr/bin/linuxarm64/vrcmd --settings-int steam.app.438100.resolutionOverride`
-   (note the old value), then `--set-settings-int steam.app.438100.resolutionOverride 1056` (720 for the toughest cases).
+Follow [ji10me/dxvk-steam-frame-dfr](https://github.com/ji10me/dxvk-steam-frame-dfr)'s guide (DXVK with MinGW-w64:
+`meson setup build-frame --cross-file build-win64.txt --buildtype release -Denable_d3d8=false -Denable_d3d9=false
+-Denable_d3d10=false`; the bridge on Linux ARM64 against OpenVR SDK `0924064`, linked with `-Wl,-rpath,'$ORIGIN'`),
+then pack it with this repository's `tools/make-dfr-package.sh DXVK_SRC OPENVR_SDK`.
 
-## 4. Switch and configure
+## 4. How DFR runs
 
-```sh
-frame-vrc switch eac             # backs up Valve's FEX, installs the patched one
-frame-vrc launch-options set     # Steam sets them through its own API; `show` prints them to paste instead
-frame-vrc resolution 1056        # optional; 720 only for the toughest cases; `reset` restores your old value
-frame-vrc doctor
-```
+With the DFR Proton, VRChat's launch options start with `…/lib/dfr-run`. It runs natively before the game: it sets
+DXVK's DFR variables for the chosen level (`frame-vrc dfr`; `auto` = on from resolution 1600) and starts the
+eye-tracking bridge, which begins once VRChat has the VR scene and ends with the game (log:
+`~/.local/share/frame-vrc/bridge.log`). With the headset off your head the gaze is invalid and DXVK shades at full rate.
 
-The launch options frame-vrc sets for the `eac` build:
+## 5. By hand (no frame-vrc)
 
-```text
-env DXVK_CONFIG="dxgi.maxDeviceMemory = 1024; dxvk.numCompilerThreads = 4" WINEDLLOVERRIDES="tabtip.exe=d" FEX_MAXINST=500 FEX_APP_CONFIG=$HOME/.local/lib/frame-vrc/lib/fex-vrchat.json EAC_LAUNCHERDIR=$HOME/.local/share/Steam/steamapps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat PROTON_EAC_RUNTIME="$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime" WINEDEBUG=-all PROTON_USE_XALIA=0 WINE_CPU_TOPOLOGY=16:0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7 %command%
-```
+1. Unpack the FEX package (`~/fex-eac-work/stage`), quit every game (`pgrep -x FEXServer` prints nothing) and run
+   `sh lib/install-fex-tool.sh` (`restore` puts Valve's files back).
+2. Paste the launch options (`frame-vrc launch-options show` prints them on a machine that has the tool), leaving out
+   `…/dfr-run` unless you set up DFR as in ji10me's guide.
+3. Resolution: `/opt/steamvr/bin/linuxarm64/vrcmd --set-settings-int steam.app.438100.resolutionOverride 1920`
+   (note the old value first with `--settings-int steam.app.438100.resolutionOverride`).
 
-What each part does: `EAC_LAUNCHERDIR` / `PROTON_EAC_RUNTIME` point EAC at Valve's runtime; `WINE_CPU_TOPOLOGY`
-reports 16 CPUs (VRChat sizes its thread pool from that); `DXVK_CONFIG` reports 1 GB of VRAM and uses 4 shader compiler
-threads; `tabtip.exe=d` drops Wine's touch keyboard (~135 MB); `FEX_MAXINST=500`
-makes FEX translate smaller blocks, Valve's own setting for Proton ARM64 (~0.65 GB less game memory, ~1.9 GB less zram,
-~10% fewer fps); `FEX_APP_CONFIG` points at the tool's
-[lib/fex-vrchat.json](../lib/fex-vrchat.json), which keeps FEX's code cache for VRChat and the EAC launcher only
-(each Wine helper process otherwise loads its own ~50 MB copy of the cache index: ~640 MB in all; without the tool, copy
-that file somewhere and change the path); `PROTON_USE_XALIA=0` and `WINEDEBUG=-all` turn off
-accessibility and logging work.
-
-For the `thunk` build, `frame-vrc switch thunk` changes the line by itself (Vulkan thunk switch, driver fix,
-`--no-vr`): see [thunk-build.md](thunk-build.md).
-
-## 5. VRChat settings that save memory
+## 6. VRChat settings that save memory
 
 In VRChat (Settings, in VR): hide Poor / Very Poor avatars, lower the avatar download and uncompressed size limits,
-lower the maximum shown avatars, turn on the particle limiter, mirrors low or off. Other people's avatars fill memory
-in busy worlds. Restarting the headset before playing gives Steam's UI processes a fresh start.
+lower the maximum shown avatars, turn on the particle limiter, mirrors low or off. Restarting the headset before
+playing gives Steam's UI processes a fresh start.
 
-## 6. Check that it works
+## 7. Check that it works
 
-Start VRChat from Steam, in VR. The first world join takes about 3 minutes (FEX translates and caches the code),
-later ones about 20 seconds. To record a session: run `frame-vrc bench` first, then start the game; the report lands in
-`~/.local/share/frame-vrc/bench/` and says whether EAC started (`Launcher finished with: 301`,
-`AntiCheat Session Begin: Success`).
-
-If it does not start, add `PROTON_LOG=1` to the launch options once and look at `~/steam-438100.log`.
+`frame-vrc doctor` should end with `all set`. To record a session: run `frame-vrc bench` first, then start the game; the
+report in `~/.local/share/frame-vrc/bench/` says whether EAC started (`Launcher finished with: 301`,
+`AntiCheat Session Begin: Success`). If the game does not start, add `PROTON_LOG=1` to the launch options once and look
+at `~/steam-438100.log`.
 
 Undo everything: [changes.md](changes.md).

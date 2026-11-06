@@ -3,6 +3,8 @@
 #   steam-launchopts.py get APPID    print them, as Steam saved them in localconfig.vdf
 #   steam-launchopts.py set APPID    set them to stdin, through Steam's own API
 #   steam-launchopts.py stop APPID   quit the game, as Steam's Stop button does
+#   steam-launchopts.py compat APPID TOOL   set the game's compatibility tool
+#   steam-launchopts.py restart | ping      restart Steam / check that it answers
 # Setting goes through Steam's CEF debug port (127.0.0.1:8080, SharedJSContext), the way Decky does: Steam keeps
 # localconfig.vdf in memory and rewrites it, so editing the file would be lost. Reading the file is reliable once
 # Steam saved it; appDetailsStore can return a stale empty value.
@@ -65,14 +67,23 @@ def get(app):
     return ""
 
 
-op, app = sys.argv[1], sys.argv[2]
+op = sys.argv[1]
+if op == "restart":  # Steam lists compatibility tools only at start
+    evaluate("SteamClient.User.StartRestart(false)")
+    sys.exit()
+if op == "ping":  # Steam's UI is up and answering
+    evaluate("1")
+    sys.exit()
+app = sys.argv[2]
 if not app.isdigit():
     sys.exit("APPID must be a number")
-if op == "get":
+if op == "compat":  # the game's compatibility tool, as Properties > Compatibility sets it
+    evaluate(f"SteamClient.Apps.SpecifyCompatTool({app}, {json.dumps(sys.argv[3])})")
+elif op == "get":
     print(get(app))
 elif op == "set":
     evaluate(f"SteamClient.Apps.SetAppLaunchOptions({app}, {json.dumps(sys.stdin.read())})")
 elif op == "stop":
     evaluate(f"SteamClient.Apps.TerminateApp('{app}', false)")
 else:
-    sys.exit("usage: steam-launchopts.py get|set|stop APPID")
+    sys.exit("usage: steam-launchopts.py get|set|stop APPID | compat APPID TOOL | restart | ping")

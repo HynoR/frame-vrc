@@ -2,110 +2,116 @@
 
 [English](README.md) · [中文](README.zh-CN.md) · **日本語**
 
-> **いじるのが好きな技術者向けです。** これは非公式の研究プロジェクトで、Linux のコマンドラインを使え、ログを読み、
-> 問題が起きたら自分で元に戻せる人を対象にしています。そうでない方は公式対応を待ってください。初心者の方は安易に試さないでください。
-> 自己責任でお願いします。[免責事項](#免責事項)を参照。
+> **いじるのが好きな人向けです。** これは非公式の研究プロジェクトで、Linux のシェルやログの読み方に慣れていて、問題が起きても
+> 自分で元に戻せる人を対象にしています。そうでなければ公式のサポートを待ってください。自己責任でお使いください（[免責事項](#免責事項)）。
 
-**Steam Frame** 単体で **PC（Windows）版 VRChat** を Easy Anti-Cheat 込みで動かします。[StonkGuy/FEX](https://github.com/StonkGuy/FEX)
-のパッチ版 FEX（`eac-*` タグ、[steamac](https://github.com/StonkGuy/steamac) の `fex-eac/` 由来）を使います。一つのツールで環境チェック、
-バックアップ付きの FEX ビルド切り替え、起動オプションと描画解像度の設定、比較できるベンチマークの記録を行います。
+**Steam Frame** 単体で **PC（Windows）版 VRChat** を Easy Anti-Cheat 込みで動かします。[StonkGuy/FEX](https://github.com/StonkGuy/FEX) の
+パッチ版 FEX（`eac-*` タグ、[steamac](https://github.com/StonkGuy/steamac) の `fex-eac/` 由来）を使い、
+フォービエイテッドレンダリング（DFR、[ji10me/dxvk-steam-frame-dfr](https://github.com/ji10me/dxvk-steam-frame-dfr)）も選べます。
+ひとつのツールで公式版とパッチ版の切り替え、検証済みの設定、ゲームの起動、すべての復元ができます。
 
-EAC は回避していません。Valve の Proton EasyAntiCheat Runtime に入っている純正の EAC クライアントをエミュレーション上で動かしており、
-パッチ版 FEX はそのためにエミュレーションを十分正確にするだけです。
+EAC は回避していません。Valve の Proton EasyAntiCheat Runtime に入っている標準の EAC クライアントがエミュレーション上で動き、
+パッチ版 FEX はそのためにエミュレーションを十分正確にしているだけです。目的は **VRChat を遊ぶこと**で、ほかの EAC ゲームは未検証です。
 
-目的は **VRChat を遊ぶこと**です。EAC を使うほかのゲームは対象外で、テストもしていません。パッチ版 FEX で動くとは限らず、
-ここの設定も VRChat 向けに調整しています。
-
-**研究段階**、検証済みのヘッドセットは 1 台（SteamOS 0.4.5 vr、2026 年 11 月）。
-
-## 動作状況
-
-| FEX ビルド（`frame-vrc switch …`） | VR | デスクトップ（`--no-vr`） |
-|---|---|---|
-| `valve`：Steam 標準の FEX-Emu | EAC が失敗（パッチの理由。steamac の Mac 環境で確認） | 同左 |
-| `eac`：steamac のパッチ版 FEX | **遊べる**：EAC 正常、ワールドに入れる。1440 で約 20 fps、1056 で約 29 fps、720 で約 36 fps | 遊べる |
-| `thunk`：`eac` + Vulkan thunk | 最初のフレームを SteamVR に渡すときにクラッシュ（FEX/Valve に任せる） | 遊べる、CPU 約 10% 減 |
-
-ボトルネックはメモリです。SteamVR、Steam の UI、トラッキングサービスで 16 GB 中約 7 GB を使い、人の多いワールドでは VRChat が残りと zram を
-使い切ります。[わかったこと](docs/history.ja.md#わかったこと)を参照。
+**研究段階**、ヘッドセット 1 台で確認済み（SteamOS 0.4.5 vr、2026 年 11 月）。
 
 ## クイックスタート
 
-Frame 上で（Konsole または SSH）、通常ユーザーで（sudo は使わない）：
+1. Steam で **Proton Experimental** と **Proton EasyAntiCheat Runtime** をインストールし、**VRChat > プロパティ > 互換性 >
+   Proton Experimental** にして Windows 版をダウンロードさせます。**FEX-Emu** がなければそれも入れます（ライブラリ > ツール）。
+2. Frame 上で（Konsole か SSH、通常ユーザー、sudo は使わない）、SteamVR を起動した状態で：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash   # frame-vrc をインストール
-~/.local/bin/frame-vrc setup --resolution 1056
+~/.local/bin/frame-vrc setup
+~/.local/bin/frame-vrc launch
 ```
 
-`setup` はすべてを順番に行います：FEX-Emu、Proton Experimental、EAC Runtime がなければ Steam にインストールを依頼し、VRChat が
-Proton Experimental 上の Windows 版か確認し、最新リリースからパッチ版 FEX をダウンロード・検証し、入れ替え（Valve のファイルはバックアップ）、
-VRChat の起動オプションと描画解像度を設定し、最後に `doctor` を実行します。途中で止まった場合は Steam でやるべきことが表示されるので、
-それをしてからもう一度実行してください。`--resolution` を付けなければ SteamVR の設定はそのまま。普段は 1056、720 は特に厳しいときだけ（約 36 fps、かなりぼやける）。
-その後 VR で VRChat を起動します。最初のワールド入場は約 3 分です。
+`setup` は推奨設定を適用します：パッチ版 FEX、DFR 版 Proton、描画解像度 1920 + DFR、下の検証済みの設定。2 つのパッケージは最新リリースから
+ダウンロードし、SHA-256 を確認します。Steam が 1 回再起動します（新しい Proton を認識させるため）。最初のワールド参加は約 3 分、以降は約 20 秒です。
 
-その他の方法（Discord で配布されたパッケージ、ヘッドセット上でのビルド、完全手動）：[docs/install.ja.md](docs/install.ja.md)。
+公式版に戻す：`frame-vrc uninstall`。詳細とほかの方法：[docs/install.ja.md](docs/install.ja.md)。
+
+## スイッチ
+
+| コマンド | 選択肢 | 既定 |
+|---|---|---|
+| `frame-vrc fex` | `valve` Steam の FEX · `eac` パッチ版（EAC に必要） | eac |
+| `frame-vrc proton` | `stock` Proton Experimental · `dfr` その複製に DFR 版 DXVK を入れたもの（Steam の本体はそのまま） | dfr |
+| `frame-vrc resolution` | `1056` 性能 · `1440` バランス · `1920` 画質；上級：`1600`、`2160`、任意の N | 1920 |
+| `frame-vrc dfr` | `auto` 1600 以上で自動オン · `off` · `def`；上級：`wide`、`ext`（2160 以上向け） | auto |
+| `frame-vrc tune`（上級） | `cpus N` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
+
+中間の解像度は SteamVR の設定で調整できます。1056 を載せているのは SteamVR の画面では 1440 までしか下げられないためです。
+`frame-vrc status` で現在の設定をすべて表示し、`frame-vrc doctor` ですべてを確認して直し方を示します。
+
+常に有効（VR で測定済み、スイッチにするほどの欠点がないもの）：FEX のコードキャッシュは VRChat だけ（Wine の補助プロセス −640 MB）、
+FEX の翻訳ブロック 500 命令（ゲームのメモリ −0.65 GB、zram −1.9 GB）、Wine のタッチキーボードをオフ（−135 MB）、デスクトップのミラーウィンドウ 640×480。
+
+## 効果があるもの、ないもの
+
+- **効果あり：** パッチ版 FEX（ないと EAC が起動しない）、上の設定、**1920 での DFR**：重いワールドでフレームレート +15〜25%
+  （シェーダーが重いほど効果が大きく、軽いワールドではノイズの範囲）。DFR が節約するのは GPU 時間で、メモリは減りません。
+- **効果なし：** Vulkan thunk（VR で落ちる）、FEX の TSO オフ（落ちる）、1440 での DFR、より粗い DFR（1920 で `ext` は `def` より速くない）、
+  1440 未満の解像度（非常時のみ）。
+
+限界はメモリです：SteamVR、Steam の画面、トラッキングで 16 GB のうち約 7 GB を使います。重いワールドに 1 人、1920 で約 1.5 GB が残ります。
+数値：[docs/research/summary.zh-CN.md](docs/research/summary.zh-CN.md)（中国語）。
+
+## コマンド
+
+```text
+frame-vrc setup [--no-dfr] [--resolution N] [--dfr URL|FILE] [FEX の URL|FILE]
+frame-vrc status | doctor | launch
+frame-vrc fex valve|eac             frame-vrc proton stock|dfr [URL|FILE]
+frame-vrc resolution 1056|1440|1920 frame-vrc dfr auto|off|def
+frame-vrc uninstall [--purge]       Valve の FEX、Proton Experimental、元の起動オプションと解像度に戻す
+上級：resolution N · dfr wide|ext · tune · install-deps · build · fetch · pack · launch-options · bench
+```
 
 ## ドキュメント
 
 | | |
 |---|---|
-| [インストール](docs/install.ja.md) | 前提条件、ビルド済み／自前ビルド／完全手動のインストール、VRChat の設定、動作確認 |
-| [変更内容と元に戻す方法](docs/changes.ja.md) | 触るファイルと設定のすべて、その場所、戻し方、完全アンインストール |
-| [経緯とわかったこと](docs/history.ja.md) | 試したこと・測ったこと・わかったことを時系列で。未解決の課題 |
-| [Vulkan thunk のビルド](docs/thunk-build.ja.md) | 任意の `thunk` ビルド |
-| [実験記録](docs/research/) | 生の記録（中国語） |
-
-## コマンド
-
-```text
-frame-vrc setup [--resolution N] [URL|FILE]  以下をまとめて実行（指定がなければ最新リリースの FEX）
-frame-vrc doctor [game]                    すべてを確認し、直すべき点を表示
-frame-vrc install-deps [game]              FEX-Emu、Proton Experimental、EAC Runtime のインストールを Steam に依頼
-frame-vrc build [--jobs N]                 ヘッドセット上でパッチ版 FEX をビルド（約 5 分、かなり熱くなる、100°C で停止）
-frame-vrc fetch URL|FILE                   配布ビルドを使う（.sha256 を隣に置く）：検証して stage に置く
-frame-vrc pack [eac|thunk]                 自分のビルドを他の人向けのパッケージにする
-frame-vrc switch status|valve|eac|thunk    Steam の FEX-Emu を切り替え（先に Valve のファイルをバックアップ）
-frame-vrc launch-options show|set|clear    VRChat の起動オプション（Steam 自身の API 経由）
-frame-vrc resolution show|N|reset          SteamVR での VRChat の描画解像度。設定画面の下限 1440 より下げられる
-frame-vrc bench [game]                     1 セッションの CPU、メモリ、温度、SteamVR の fps、EAC の結果を記録
-frame-vrc uninstall [--purge]              すべて元に戻す
-```
+| [インストール](docs/install.ja.md) | 前提条件、パッケージ・自分でビルド・手動のインストール、動作確認 |
+| [何が変わるか、戻し方](docs/changes.ja.md) | 触るファイルと設定のすべて、戻し方、完全アンインストール |
+| [履歴](docs/history.ja.md) | バージョンごとに試したことと分かったこと |
+| [研究のまとめ](docs/research/summary.zh-CN.md) | 測定結果（中国語） |
 
 ## 安全性
 
-通常ユーザーで動き、sudo は使わず、`~` の下にしか書き込みません。システム、ファームウェア、`/persist` は変更しません。
-すべての変更は元に戻せます（[docs/changes.ja.md](docs/changes.ja.md)）。影響するのは Steam が FEX-Emu 互換ツール（x86 Proton）で動かすゲームだけです。
+通常ユーザーで動き、sudo は使わず、`~` 以下にだけ書き込みます。システム、ファームウェア、`/persist` は変更しません。
+すべての変更は元に戻せます（[docs/changes.ja.md](docs/changes.ja.md)）。変わるのは VRChat の設定と Steam の FEX-Emu ツールだけで、
+Proton Experimental 本体は一切変更しません（DFR は複製を使います）。
 
 ## 研究への協力
 
 `frame-vrc bench` のレポート（`~/.local/share/frame-vrc/bench/`）を **Benchmark report** の issue テンプレートか Discord で共有してください。
-同じワールド、同じ時間、一度に変えるのは一つだけにして、何を変えたかを書いてください。自動アップロードはしません。
+同じワールド・同じ長さで、一度に 1 つだけ変え、何を変えたかを書いてください。自動アップロードは一切ありません。
 
 ## 謝辞と関連プロジェクト
 
-- [steamac](https://github.com/StonkGuy/steamac) と [StonkGuy/FEX](https://github.com/StonkGuy/FEX)（FX GAMES）：Proton で EAC を動かせるようにしたパッチ版 FEX と、
+- [steamac](https://github.com/StonkGuy/steamac) と [StonkGuy/FEX](https://github.com/StonkGuy/FEX)（FX GAMES）：Proton で EAC を動かすパッチ版 FEX と、
   このツールの出発点になった `fex-eac/` のビルド・インストールスクリプト。
-- [FEX-Emu](https://github.com/FEX-Emu/FEX)：ここにあるすべてが動いている x86 エミュレータ。
-- Valve：Proton、Proton EasyAntiCheat Runtime、SteamVR、Steam Frame 用の FEX-Emu ツール。
-- [DXVK](https://github.com/doitsujin/dxvk) と Mesa の Turnip ドライバ：Frame の GPU で Direct3D と Vulkan を動かす。
-- [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader)：起動オプションの設定に使っている Steam CEF の方法。
-- X の [@ji10me](https://x.com/ji10me) さん、Steam Frame での VRChat についての発信に感謝します：
-  https://x.com/ji10me/status/2117211791570919632 · https://x.com/ji10me/status/2116820842579628327
+- [ji10me/dxvk-steam-frame-dfr](https://github.com/ji10me/dxvk-steam-frame-dfr)（[@ji10me](https://x.com/ji10me)）、ReinaS-64892 と poprox24 の
+  DFR の成果に基づく：フォービエイテッドレンダリングの DXVK と視線ブリッジ。
+- [FEX-Emu](https://github.com/FEX-Emu/FEX)：ここのすべてが動いている x86 エミュレーター。
+- Valve：Proton、Proton EasyAntiCheat Runtime、SteamVR、OpenVR、Steam Frame の FEX-Emu ツール。
+- [DXVK](https://github.com/doitsujin/dxvk) と Mesa の Turnip ドライバー：Frame の GPU 上の Direct3D と Vulkan。
+- [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader)：起動オプションの設定に使う Steam CEF の方法。
 
 ## 免責事項
 
-- **初心者向けではありません。** 画質は粗く、fps は低く、初回のロードは長く、クラッシュすることもあり、ログを読む必要があります。
-  問題が起きたら [docs/changes.ja.md](docs/changes.ja.md) を見て自分で元に戻せることが前提です。
-- **非公式です。** Valve、VRChat、Epic Games（Easy Anti-Cheat）、FEX-Emu、FX GAMES とは無関係で、承認も受けていません。いずれも Frame での
-  PC 版の動作をサポートしておらず、Steam、SteamVR、Proton、VRChat のアップデートでいつでも動かなくなる可能性があります。
-- **アカウントについて。** EAC を回避・改変はしていませんが、この動かし方を受け入れるかどうかは VRChat と EAC の判断です。ゲームファイルは
-  改変しないでください。VRChat の利用規約を守るのはご自身の責任です。
-- **ハードウェアについて。** ビルド中やプレイ中はヘッドセットがかなり熱くなります（実測で最大約 98°C）。電源につなぎ、風通しを良くし、
-  不快に感じたら中止してください。
-- **無保証です。** Apache-2.0 ライセンスのもと「現状のまま」提供され、いかなる保証もありません。作者は損害、データの消失、アカウントへの
-  措置について一切責任を負いません。
+- **初心者向けではありません。** 画面がぼやける、フレームレートが低い、最初の読み込みが長い、落ちる、ログを読む必要がある、と考えてください。
+  問題が起きたら [docs/changes.ja.md](docs/changes.ja.md) に従って自分で戻せる必要があります。
+- **非公式です。** Valve、VRChat、Epic Games（Easy Anti-Cheat）、FEX-Emu、FX GAMES とは無関係で、承認も受けていません。Frame で PC 版を動かすことは
+  どこもサポートしておらず、Steam、SteamVR、Proton、VRChat の更新でいつでも動かなくなる可能性があります。
+- **あなたのアカウント。** EAC は回避も改変もしていませんが、この環境を受け入れるかどうかは VRChat と EAC が決めます。ゲームファイルは改変しないでください。
+  VRChat の利用規約を守る責任はあなたにあります。
+- **あなたのハードウェア。** ビルドとプレイでヘッドセットは高温になります（実測で最大約 98 °C）。電源につなぎ、風通しを良くし、不快なら止めてください。
+- **無保証。** Apache-2.0 ライセンスの下で「現状のまま」提供され、いかなる保証もありません。作者は損害、データの消失、アカウントへの処分について責任を負いません。
 
 ## ライセンス
 
-Apache-2.0。[LICENSE](LICENSE) と [NOTICE](NOTICE) を参照。
+Apache-2.0、[LICENSE](LICENSE) と [NOTICE](NOTICE) を参照。DFR パッケージには独自のライセンス（DXVK と Frame 部分：zlib、GAZ2 ヘッダー：MIT、
+OpenVR：BSD-3-Clause）が `dfr/licenses/` に入っています。
