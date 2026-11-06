@@ -53,7 +53,7 @@ VRChat のメモリと CPU）、ログページもあります。表示は英語
 | `frame-vrc proton` | `stock` Proton Experimental · `dfr` その複製に DFR 版 DXVK を入れたもの（Steam の本体はそのまま） | dfr |
 | `frame-vrc resolution` | `1056` 性能 · `1440` バランス · `1920` 画質；上級：`1600`、`2160`、任意の N | 1920 |
 | `frame-vrc dfr` | `auto` 1440 以上で自動オン · `off` · `def`；上級：`wide`、`ext`（2160 以上向け） | auto |
-| `frame-vrc tune`（上級） | `cpus N` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
+| `frame-vrc tune`（上級） | `cpus 8\|16\|32` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
 
 中間の解像度は SteamVR の設定で調整できます。1056 を載せているのは SteamVR の画面では 1440 までしか下げられないためです。
 `frame-vrc status` で現在の設定をすべて表示し、`frame-vrc doctor` ですべてを確認して直し方を示します。

@@ -56,7 +56,7 @@ Back to the official versions: `frame-vrc uninstall`. Details and other ways: [d
 | `frame-vrc proton` | `stock` Proton Experimental · `dfr` its copy with the DFR DXVK (Steam's own copy stays untouched) | dfr |
 | `frame-vrc resolution` | `1056` performance · `1440` balanced · `1920` quality; advanced: `1600`, `2160`, any N | 1920 |
 | `frame-vrc dfr` | `auto` on from 1440 up · `off` · `def`; advanced: `wide`, `ext` (for 2160 and up) | auto |
-| `frame-vrc tune` (advanced) | `cpus N` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
+| `frame-vrc tune` (advanced) | `cpus 8\|16\|32` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
 
 SteamVR's own settings cover the resolutions in between; 1056 is listed because SteamVR's UI stops at 1440.
 `frame-vrc status` shows everything; `frame-vrc doctor` checks everything and says what to fix.

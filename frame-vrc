@@ -586,15 +586,20 @@ cmd_resolution() {
   esac
 }
 
+# 8, 16 or 32: a multiple of the 8 cores maps evenly onto all of them; fewer than 8 would leave out the fast cores 5-7
+# (the list starts at core 0).
+cpus_ok() { [[ $1 =~ ^(8|16|32)$ ]] || die "cpus: 8, 16 or 32 (built-in 16)"; }
+
 cmd_tune() {
   case ${1:-} in
     "") echo "cpus $(cfg CPUS), dxvk-threads $(cfg DXVK_THREADS), vram $(cfg VRAM) MB" ;;
     cpus | dxvk-threads | vram)
       [[ ${2:-} =~ ^[0-9]+$ ]] || die "usage: frame-vrc tune $1 N"
+      [[ $1 != cpus ]] || cpus_ok "$2"
       local k; case $1 in cpus) k=CPUS ;; dxvk-threads) k=DXVK_THREADS ;; vram) k=VRAM ;; esac
       cfg_set $k "$2"; apply_opts; echo "$1: $2" ;;
     reset) cfg_unset CPUS; cfg_unset DXVK_THREADS; cfg_unset VRAM; apply_opts; echo "tune: built-in values (cpus 16, dxvk-threads 4, vram 1024)" ;;
-    *) die "usage: frame-vrc tune [cpus N | dxvk-threads N | vram MB | reset]" ;;
+    *) die "usage: frame-vrc tune [cpus 8|16|32 | dxvk-threads N | vram MB | reset]" ;;
   esac
 }
 
@@ -609,6 +614,7 @@ cmd_apply() {
       dfr) [[ $v =~ ^(auto|off|def|wide|ext)$ ]] || die "dfr: auto|off|def|wide|ext"; cfg_set DFR "$v"; msgs+=("dfr $v") ;;
       cpus | dxvk-threads | vram)
         [[ $v =~ ^[0-9]+$ ]] || die "$k: a number"
+        [[ $k != cpus ]] || cpus_ok "$v"
         case $k in cpus) cfg_set CPUS "$v" ;; dxvk-threads) cfg_set DXVK_THREADS "$v" ;; vram) cfg_set VRAM "$v" ;; esac
         msgs+=("$k $v") ;;
       *) die "usage: frame-vrc apply resolution=N dfr=LEVEL cpus=N dxvk-threads=N vram=MB" ;;
@@ -743,7 +749,7 @@ frame-vrc $VERSION: PC VRChat on the Steam Frame (patched FEX, optional foveated
 advanced
   frame-vrc resolution 1600|2160|N  any render resolution 360-4096
   frame-vrc dfr wide|ext            coarser periphery (ext: for 2160 and up)
-  frame-vrc tune [cpus N|dxvk-threads N|vram MB|reset]   built-in 16 / 4 / 1024
+  frame-vrc tune [cpus 8|16|32|dxvk-threads N|vram MB|reset]   built-in 16 / 4 / 1024
   frame-vrc apply resolution=N dfr=LEVEL cpus=N ...      several settings at once
   frame-vrc install-deps            ask Steam to install FEX-Emu, Proton Experimental, EAC Runtime
   frame-vrc build [--jobs N] | fetch URL|FILE | pack      the patched FEX: build it here / use a package / make one

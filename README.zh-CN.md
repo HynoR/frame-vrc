@@ -50,7 +50,7 @@ setup 按推荐配置设好：补丁版 FEX、DFR 版 Proton、渲染分辨率 1
 | `frame-vrc proton` | `stock` Proton Experimental · `dfr` 它的副本，换上 DFR 版 DXVK（Steam 自己那份不动） | dfr |
 | `frame-vrc resolution` | `1056` 性能 · `1440` 均衡 · `1920` 画质；高级：`1600`、`2160`、任意 N | 1920 |
 | `frame-vrc dfr` | `auto` 1440 及以上自动开 · `off` · `def`；高级：`wide`、`ext`（适合 2160 及以上） | auto |
-| `frame-vrc tune`（高级） | `cpus N` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
+| `frame-vrc tune`（高级） | `cpus 8\|16\|32` · `dxvk-threads N` · `vram MB` · `reset` | 16 · 4 · 1024 |
 
 中间的分辨率用 SteamVR 自己的设置就能调；列出 1056 是因为 SteamVR 界面最低只到 1440。
 `frame-vrc status` 显示当前全部设置；`frame-vrc doctor` 检查一切并说明怎么修。

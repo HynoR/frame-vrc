@@ -377,17 +377,15 @@ void PanelUi::drawEnvironment(const Pen& pen, const Snapshot& s) {
 }
 
 void PanelUi::tuneRow(const Pen& pen, double x, double y, double w, const std::string& label, const std::string& key,
-                      int value, int step, int lo, int hi, const std::string& unit) {
+                      int value, int down, int up, const std::string& unit) {
     pen.text(x, y + 28, label, 17, cText);
     const double bx = x + w - 200;
     const bool ok = value > 0;
-    button(pen, "set:" + key + "=" + std::to_string(std::max(lo, value - step)), bx, y + 4, 44, 36, "−",
-           ok && value - step >= lo, false, 22);
+    button(pen, "set:" + key + "=" + std::to_string(down), bx, y + 4, 44, 36, "−", ok && down > 0, false, 22);
     const std::string v = value > 0 ? std::to_string(value) + unit : "—";
     const double tw = pen.measure(v, 18, true);
     pen.text(bx + 100 - tw / 2, y + 29, v, 18, cText, true);
-    button(pen, "set:" + key + "=" + std::to_string(std::min(hi, value + step)), bx + 156, y + 4, 44, 36, "+",
-           ok && value + step <= hi, false, 22);
+    button(pen, "set:" + key + "=" + std::to_string(up), bx + 156, y + 4, 44, 36, "+", ok && up > 0, false, 22);
 }
 
 void PanelUi::drawAdvanced(const Pen& pen, const Snapshot& s) {
@@ -425,11 +423,16 @@ void PanelUi::drawAdvanced(const Pen& pen, const Snapshot& s) {
     card(pen, kX0, y, kHalfW, h3, tr("Tuning", "チューニング"));
     button(pen, "set:cpus=16,dxvk-threads=4,vram=1024", kX0 + kHalfW - 120, y + 10, 100, 36, tr("Defaults", "既定値"), st.known,
            false, 16);
-    tuneRow(pen, kX0 + 20, y + 50, kHalfW - 40, tr("CPUs reported", "報告する CPU 数"), "cpus", settingInt(s, "cpus", st.cpus), 2, 4, 32, "");
-    tuneRow(pen, kX0 + 20, y + 96, kHalfW - 40, tr("Shader threads", "シェーダースレッド"), "dxvk-threads",
-            settingInt(s, "dxvk-threads", st.dxvkThreads), 1, 1, 8, "");
-    tuneRow(pen, kX0 + 20, y + 142, kHalfW - 40, tr("VRAM reported", "報告する VRAM"), "vram", settingInt(s, "vram", st.vram), 256, 512, 4096,
-            " MB");
+    // CPUs: 8, 16 or 32 only - a multiple of the 8 cores maps evenly onto all of them (fewer would leave out the fast
+    // cores 5-7, as frame-vrc lists the cores from 0)
+    const int cpus = settingInt(s, "cpus", st.cpus), threads = settingInt(s, "dxvk-threads", st.dxvkThreads),
+              vram = settingInt(s, "vram", st.vram);
+    tuneRow(pen, kX0 + 20, y + 50, kHalfW - 40, tr("CPUs reported", "報告する CPU 数"), "cpus", cpus,
+            cpus > 16 ? 16 : cpus > 8 ? 8 : 0, cpus < 16 ? 16 : cpus < 32 ? 32 : 0, "");
+    tuneRow(pen, kX0 + 20, y + 96, kHalfW - 40, tr("Shader threads", "シェーダースレッド"), "dxvk-threads", threads,
+            threads > 1 ? threads - 1 : 0, threads < 8 ? threads + 1 : 0, "");
+    tuneRow(pen, kX0 + 20, y + 142, kHalfW - 40, tr("VRAM reported", "報告する VRAM"), "vram", vram,
+            vram > 512 ? vram - 256 : 0, vram < 4096 ? vram + 256 : 0, " MB");
     card(pen, rx, y, kHalfW, h3, tr("Maintenance", "メンテナンス"));
     button(pen, "run:launch-options set", rx + 20, y + 52, bw, 44, tr("Set launch options", "起動オプションを設定"), canRun("launch-options set"));
     button(pen, "run:update", rx + 30 + bw, y + 52, bw, 44, tr("Update frame-vrc", "frame-vrc を更新"), canRun("update"));

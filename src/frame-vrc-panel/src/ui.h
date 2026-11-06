@@ -95,7 +95,7 @@ private:
     void drawAdvanced(const Pen& pen, const Snapshot& s);
     void drawFooter(const Pen& pen, const Snapshot& s);
     void tuneRow(const Pen& pen, double x, double y, double w, const std::string& label, const std::string& key,
-                 int value, int step, int lo, int hi, const std::string& unit);
+                 int value, int down, int up, const std::string& unit);
 };
 
 /** The app icon (the .desktop launcher): the dashboard thumbnail without the status dot. */
