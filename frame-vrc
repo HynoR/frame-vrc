@@ -1,0 +1,1151 @@
+#!/usr/bin/env bash
+# frame-vrc: play the PC (Windows) version of VRChat, EAC included, on the Steam Frame with the patched FEX
+# (StonkGuy/FEX, eac-* tag) and foveated rendering (DFR). Other EAC games are not a goal and untested.
+# Runs as user steamos, never sudo, writes only under $HOME; every change has an undo. See README.md.
+#
+# Two versions, chosen by VRChat's compatibility tool in Steam (the panel's switch does the same as Steam's Properties >
+# Compatibility). official: Lepton, Valve's setup, the Android build. community: frame-vrc's Proton copy, "Proton
+# Experimental (Ji10me PCVR Edit)", the PC build. Which build is on disk is Steam's business: frame-vrc never moves game
+# files or starts downloads. Everything frame-vrc adds is for VRChat only; Steam's FEX-Emu and other games are untouched.
+set -euo pipefail
+VERSION=0.8.0
+repo=HynoR/frame-vrc
+here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
+lib=$here/lib
+steam=$HOME/.local/share/Steam
+# Steam libraries (libraryfolders.vdf: the built-in one, an SD card, another drive). lib_of APPID: the steamapps folder
+# of the library that has the app, else the built-in one.
+libs() {
+  { echo "$steam"; sed -n 's/^[[:space:]]*"path"[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' "$steam/steamapps/libraryfolders.vdf" 2>/dev/null; } |
+    awk '!seen[$0]++'
+}
+lib_of() {
+  local l
+  while read -r l; do [[ -f $l/steamapps/appmanifest_$1.acf ]] && { echo "$l/steamapps"; return; }; done < <(libs)
+  echo "$steam/steamapps"
+}
+apps=$(lib_of 438100)  # VRChat's library: its files, its prefix (compatdata), its downloads
+fex=$(lib_of 3127680)/common/FEX-Emu
+proton_exp="$(lib_of 1493710)/common/Proton - Experimental"
+eac_rt="$(lib_of 1826330)/common/Proton EasyAntiCheat Runtime"
+data=$HOME/.local/share/frame-vrc
+config=$data/config
+# The patched FEX for VRChat only: Steam's FEX-Emu copied, with the patched binaries from the stage. lib/frame-vrc-run
+# hands it to Steam's FEX layer in place of Steam's FEX-Emu.
+pfex=$data/fex
+# Where the patched FEX is built or unpacked (stage/); same default as lib/build-fex.sh.
+work=${FRAME_VRC_WORK:-$HOME/fex-eac-work}
+export WORK=$work
+# frame-vrc 0.7 and older swapped the patched FEX into Steam's FEX-Emu and kept Valve's files here: put back once.
+backup=$work/valve-backup
+# The files of a patched build
+bins="FEX FEXBash FEXGetConfig FEXOfflineCompiler FEXServer FEXServerManager FEXpidof"
+files="FEXCompatTool VERSIONS.txt ConfigTemplate.json"
+# The Proton copy: Proton Experimental copied whole (Steam's own stays untouched) with the community DFR DXVK
+# (ji10me/dxvk-steam-frame-dfr) in place of its DXVK, and the native eye-tracking bridge. The DLLs must sit in Proton's
+# own DXVK folder: next to VRChat.exe the game crashes in Wine's loader (2026-11-06).
+dfr_tool=frame-vrc-dfr
+dfr_name="Proton Experimental (Ji10me PCVR Edit)"
+dfr_dir=$steam/compatibilitytools.d/$dfr_tool
+dfr_pkg=$data/dfr  # d3d11.dll dxgi.dll VERSION, from a dfr-dxvk package (the eye-tracking bridge is built: runtime_install)
+dfr_files="d3d11.dll dxgi.dll"
+# H.264 hardware decoding: ji10me's patched GStreamer 1.22 V4L2 plugin (x86-64, LGPL) for the Frame's video decoder,
+# from a video-h264 package; lib/frame-vrc-run puts it in front of Proton's GStreamer.
+video_pkg=$data/video
+video_files=libgstvideo4linux2.so
+# ji10me's audio fix: Wine's mf.dll restarting its audio client when playback resumes (wine-mf package, LGPL), built for
+# the Proton Experimental whose own mf.dll has this hash; used only on that one.
+mf_pkg=$data/mf
+mf_files=mf.dll
+mf_tested=3695700fc9373ba390c540c4825e49616bfd653036e268f9ccb6a246f40a5b92
+# The runtime is ji10me's tested setup (SteamFrame_Standalone_PCVR_VRChat 0.3.6; MIT parts in lib/ji10me): FEX and DXVK
+# settings, Vulkan thunks, DFR and video in the private FEX's emulator.json (lib/fex-runtime.py), and his session
+# supervisor with the eye-tracking bridge in $runtime. frame-vrc only installs it and switches versions.
+ji_version=ji10me-0.3.6
+runtime=$data/runtime
+fexcfg=$data/fex-config
+
+die() { echo "frame-vrc: $*" >&2; exit 1; }
+describe() { sed -n 's/^FEX describe\t//p' "$1/VERSIONS.txt" 2>/dev/null; }
+maxtemp() { cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1; }
+
+# ---- settings -------------------------------------------------------------------------------------------------
+# One file of KEY=value lines, read by lib/frame-vrc-run at each launch. Defaults are the tested values.
+cfg() {
+  local v; v=$(sed -n "s/^$1=//p" "$config" 2>/dev/null | tail -1)
+  if [[ -n $v ]]; then echo "$v"; return; fi
+  case $1 in
+    RES) echo 1920 ;;
+  esac
+}
+cfg_set() {
+  mkdir -p "$data"
+  { grep -v "^$1=" "$config" 2>/dev/null || true; echo "$1=$2"; } >"$config.new" && mv "$config.new" "$config"
+}
+cfg_unset() { [[ -f $config ]] && { grep -v "^$1=" "$config" >"$config.new" || true; mv "$config.new" "$config"; } || true; }
+
+# ---- the game -------------------------------------------------------------------------------------------------
+appid=438100 name=VRChat
+gamedir=$apps/common/$name acf=$apps/appmanifest_$appid.acf
+gamelog="$apps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/LocalLow/VRChat/VRChat"
+# VRChat.exe, or anything Steam runs for VRChat (a launch, the Android build, its install script after an update)
+running() { pgrep -x VRChat.exe >/dev/null || pgrep -f "AppId=$appid( |$)" >/dev/null; }
+quit_first() {
+  running || return 0
+  pgrep -x VRChat.exe >/dev/null && die "quit $name first"
+  die "Steam is still running something for $name (starting it, or its install script after an update): wait a minute"
+}
+
+steamapi() { python3 -I "$lib/steam-launchopts.py" "$@"; }
+# A steam:// URL through Steam's API: "steam URL &" is stopped with the panel's systemd unit before it passes it on.
+steam_url() { steamapi url "$1" >/dev/null 2>&1 || { steam "$1" >/dev/null 2>&1 & sleep 2; }; }
+opts_get() { steamapi get "$appid"; }
+# Steam writes localconfig.vdf a moment after the API call; wait for it, then compare.
+opts_set() {
+  printf '%s' "$1" | steamapi set "$appid" >/dev/null
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [[ "$(opts_get)" == "$1" ]] && return 0
+    sleep 1
+  done
+  die "Steam did not save the launch options (is Steam running?)"
+}
+# The launch options: the same line always (the settings are read at launch). $HOME stays literal: Steam runs the
+# line through a shell.
+run_line() { printf '%s' "\$HOME/${lib#"$HOME"/}/frame-vrc-run %command%"; }
+# frame-vrc's: this line, or an older frame-vrc's (env ... EAC_LAUNCHERDIR=... %command%).
+ours() { [[ "$1" == *frame-vrc-run* || ("$1" == *EAC_LAUNCHERDIR=* && "$1" == *PROTON_EAC_RUNTIME=*) ]]; }
+
+# The game's compatibility tool in Steam: CompatToolMapping > "<appid>" > "name" ("" = Steam's default, Lepton)
+compat_tool() {
+  awk -v id="\"$appid\"" '/"CompatToolMapping"/{m=1} m&&$1==id{a=1} a&&$1=="\"name\""{gsub(/"/,"",$2); print $2; exit}' \
+    "$steam/config/config.vdf" 2>/dev/null || true
+}
+# As Properties > Compatibility. Steam saves config.vdf a while after the change; ask it again until it has. Steam
+# downloads the other build at its next update of the game (Library > VRChat > Update makes it now).
+# Lepton by name: clearing the choice was reverted by Steam to the last tool (2026-11-09).
+set_compat_tool() {
+  steamapi compat "$appid" "$1" >/dev/null
+  for _ in $(seq 1 20); do [[ $(compat_tool) == "$1" ]] && return 0; sleep 1; done
+  return 1
+}
+# official (Lepton: Steam's default for VRChat on the Frame), community (frame-vrc's Proton copy), other (another
+# Proton: no EAC, frame-vrc setup fixes it), nothing: VRChat not installed.
+edition() {
+  [[ -f $acf ]] || return 0
+  case $(compat_tool) in
+    "$dfr_tool") echo community ;;
+    "" | lepton*) echo official ;;
+    *) echo other ;;
+  esac
+}
+# pc, android, or nothing
+game_build() {
+  if [[ -f $gamedir/$name.exe ]]; then echo pc
+  elif [[ -e $gamedir/$name.apk ]]; then echo android; fi
+}
+
+# ---- FEX ------------------------------------------------------------------------------------------------------
+# same DIR_A DIR_B: a patched build's files are identical
+same() {
+  local f
+  for f in $bins; do cmp -s "$1/usr/bin/$f" "$2/usr/bin/$f" || return 1; done
+  for f in $files; do cmp -s "$1/$f" "$2/$f" || return 1; done
+}
+# the private FEX holds the staged build's binaries (its settings are the runtime's)
+pfex_same() {
+  local f
+  for f in $bins; do cmp -s "$pfex/usr/bin/$f" "$work/stage/usr/bin/$f" || return 1; done
+  cmp -s "$pfex/VERSIONS.txt" "$work/stage/VERSIONS.txt" && cmp -s "$pfex/FEXCompatTool" "$work/stage/FEXCompatTool"
+}
+sha() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -d' ' -f1; }
+# ok: the staged build on the FEX-Emu Steam has now, with this version's runtime; old: another build is staged, Steam
+# updated FEX-Emu since (its scripts and rootfs in the copy are older), or another runtime; missing
+pfex_state() {
+  if [[ ! -x $pfex/fex-compat-tool ]]; then echo missing
+  elif [[ -d $work/stage ]] && ! pfex_same; then echo old
+  elif [[ $(cat "$pfex/.frame-vrc-runtime" 2>/dev/null) != "$ji_version"* ]]; then echo old
+  elif [[ $(describe "$fex") != eac-* ]] && ! cmp -s "$pfex/.steam-VERSIONS.txt" "$fex/VERSIONS.txt"; then echo old
+  else echo ok; fi
+}
+# Steam's FEX-Emu copied (~25 MB: its scripts, rootfs and libraries; copied, not linked, so a Steam update of FEX-Emu
+# never meets binaries it was not built with) with the staged build's binaries.
+pfex_install() {
+  [[ -d $fex ]] || die "FEX-Emu not installed: frame-vrc install-deps"
+  [[ -d $work/stage ]] || die "no patched FEX staged"
+  [[ $(pfex_state) == ok ]] && return 0
+  quit_first
+  local f
+  rm -rf "$pfex.new"; mkdir -p "$data"
+  cp -a "$fex" "$pfex.new"
+  rm -rf "$pfex.new/__pycache__"
+  cp "$fex/VERSIONS.txt" "$pfex.new/.steam-VERSIONS.txt"  # which FEX-Emu it was copied from
+  # Valve's script prints the whole environment into Steam's log, which people share in bug reports (ji10me's setup
+  # drops it too)
+  grep -vF "subprocess.call(['/usr/bin/printenv'])" "$fex/fex-compat-tool" >"$pfex.new/fex-compat-tool" || true
+  for f in $bins; do cp "$work/stage/usr/bin/$f" "$pfex.new/usr/bin/$f"; done
+  for f in $files; do cp "$work/stage/$f" "$pfex.new/$f"; done
+  same "$pfex.new" "$work/stage" || die "copying the patched FEX failed"
+  # ji10me's runtime settings, Vulkan thunks with his lookup adapter (built here)
+  local thunks video=""
+  [[ ! -f $runtime/video/libgstvideo4linux2.so ]] || video=$runtime/video
+  thunks=$(python3 -I "$lib/fex-runtime.py" "$pfex.new" "$fexcfg" "$video" "$HOME/.local/share/frame-pcvr/gaze/frame-gaze-v1.bin" \
+    "$lib/ji10me/vulkan_lookup_adapter.c" "$pfex") || die "setting up ji10me's runtime in the FEX copy failed"
+  echo "$ji_version $thunks" >"$pfex.new/.frame-vrc-runtime"
+  rm -rf "$pfex"; mv "$pfex.new" "$pfex"
+  echo "patched FEX for $name: $(describe "$pfex"), $ji_version runtime, Vulkan $thunks (Steam's FEX-Emu, for other games: $(describe "$fex"))"
+}
+# ji10me's session supervisor (VRChat's tested thread layout, the eye-tracking bridge once VR is ready), the bridge and
+# SteamVR status reader built here against SteamVR's own OpenVR library, and the H.264 plugin alone in a folder.
+runtime_state() {
+  [[ -x $runtime/gaze-bridge && -x $runtime/openvr-stats ]] || { echo missing; return; }
+  cmp -s "$runtime/session.py" "$lib/ji10me/session.py" && [[ $(cat "$runtime/.version" 2>/dev/null) == "$ji_version" ]] &&
+    { [[ ! -f $video_pkg/libgstvideo4linux2.so ]] || cmp -s "$runtime/video/libgstvideo4linux2.so" "$video_pkg/libgstvideo4linux2.so"; } &&
+    echo ok || echo old
+}
+runtime_install() {
+  [[ $(runtime_state) == ok ]] && return 0
+  local ovr=/opt/steamvr/bin/linuxarm64 j=$lib/ji10me t
+  [[ -f $ovr/libopenvr_api.so ]] || die "SteamVR's libopenvr_api.so not found in $ovr: install and start SteamVR once"
+  command -v clang++ >/dev/null || die "clang++ missing (SteamOS ships it)"
+  quit_first
+  rm -rf "$runtime.new"; mkdir -p "$runtime.new/video"
+  for t in gaze-bridge:frame_gaze_bridge openvr-stats:openvr_stats; do
+    clang++ -std=c++17 -O2 -I"$j" "$j/${t#*:}.cpp" -L"$ovr" -Wl,-rpath,"$ovr" -lopenvr_api -o "$runtime.new/${t%%:*}" ||
+      die "building ji10me's ${t%%:*} failed"
+  done
+  cp "$j/session.py" "$runtime.new/"
+  [[ ! -f $video_pkg/libgstvideo4linux2.so ]] || cp "$video_pkg/libgstvideo4linux2.so" "$runtime.new/video/"
+  echo "$ji_version" >"$runtime.new/.version"
+  rm -rf "$runtime"; mv "$runtime.new" "$runtime"
+  echo "ji10me's session supervisor and eye-tracking bridge built"
+}
+# frame-vrc 0.7 left the patched build in Steam's FEX-Emu: Valve's files back from its backup (a Steam verify of a
+# game run with FEX does the same). Fails (1, with the reason) when it cannot: no complete backup, or FEXServer still
+# running after a minute (Steam's x86 helpers right after it starts, or another game): swapping under it leaves a
+# half-old, half-new tool.
+steam_fex_restore() {
+  [[ -d $fex && $(describe "$fex") == eac-* ]] || return 0
+  local b f i
+  for b in "$backup"/FEX-*; do [[ -d $b ]] && break; done
+  for f in $bins; do [[ -s $b/usr/bin/$f ]] || { echo "frame-vrc: Steam's FEX-Emu holds frame-vrc 0.7's patched build and there is no complete Valve backup: verify FEX-Emu in Steam (Library > FEX-Emu > Properties > Installed Files)" >&2; return 1; }; done
+  for f in $files; do [[ -s $b/$f ]] || { echo "frame-vrc: the Valve backup in $b lacks $f: verify FEX-Emu in Steam" >&2; return 1; }; done
+  for i in $(seq 1 30); do
+    pgrep -x FEXServer >/dev/null || break
+    ((i > 1)) || echo "waiting for FEXServer to quit (Steam's x86 helpers or a game, a minute at most)"
+    ((i < 30)) || { echo "frame-vrc: FEXServer is running (a game?): quit it, then run this again" >&2; return 1; }
+    sleep 2
+  done
+  # Valve's thunks, if frame-vrc 0.5 replaced them
+  [[ ! -d $b/thunks ]] || cp -a "$b/thunks/." "$fex/" || return 1
+  for f in $bins; do cp "$b/usr/bin/$f" "$fex/usr/bin/.$f.new" && mv -f "$fex/usr/bin/.$f.new" "$fex/usr/bin/$f" || return 1; done
+  for f in $files; do cp "$b/$f" "$fex/.$f.new" && mv -f "$fex/.$f.new" "$fex/$f" || return 1; done
+  if same "$fex" "$b"; then
+    rm -rf "$backup"; echo "Steam's FEX-Emu is Valve's build again ($(describe "$fex")), as frame-vrc 0.8 leaves it"
+  else
+    echo "frame-vrc: putting Valve's FEX back did not take: verify FEX-Emu in Steam" >&2; return 1
+  fi
+}
+
+# ---- packages -------------------------------------------------------------------------------------------------
+# The release asset whose name matches $1: from this version's own release (also a pre-release), else from the newest
+# release that has one, a pre-release only when no release has (the H.264 package came with the 0.8 pre-releases).
+# GitHub's API, no token needed: 60 calls an hour per address, shared behind a proxy; each answer is kept 10 minutes
+# in $data/cache.
+release_json() {
+  local f=$data/cache/release-${1//[^A-Za-z0-9.]/-}.json
+  if [[ -z $(find "$f" -mmin -10 2>/dev/null) ]]; then
+    # GitHub just did not answer: not asked again (and not reported again) for a minute
+    [[ -z $(find "$data/cache/offline" -mmin -1 2>/dev/null) ]] || return 1
+    mkdir -p "$data/cache"
+    local u=https://api.github.com/repos/$repo/releases
+    [[ $1 == \?* ]] && u+=$1 || u+=/$1  # ?per_page=N: the list
+    case $(curl -sSL -m 20 -o "$f.new" -w '%{http_code}' "$u" 2>/dev/null) in
+      200) mv "$f.new" "$f" ;;
+      # no such release (this version's own, before it is out): not kept, it may be out a minute later
+      404) rm -f "$f.new"; echo '{"assets": []}'; return 0 ;;
+      *) rm -f "$f.new"; touch "$data/cache/offline"
+         echo "frame-vrc: GitHub did not answer (offline, or its limit of 60 requests an hour)" >&2; return 1 ;;
+    esac
+  fi
+  cat "$f"
+}
+latest_asset() {
+  local r
+  for r in "tags/v$VERSION" "?per_page=30"; do
+    release_json "$r" | python3 -I -c '
+import json, re, sys
+d = json.load(sys.stdin)
+rels = d if isinstance(d, list) else [d]  # the list is newest first; releases before pre-releases
+rels = sorted((x for x in rels if not x.get("draft")), key=lambda x: bool(x.get("prerelease")))
+print(next(a["browser_download_url"] for x in rels for a in x.get("assets", []) if re.fullmatch(sys.argv[1], a["name"])))' "$1" 2>/dev/null &&
+      return
+  done
+  return 1
+}
+
+# Where a package came from (DIR/ASSET): the release asset's name, or file:NAME / given:NAME for one the user gave as a
+# file or URL (pin DIR SOURCE; a release's never replaces it). newer_asset PATTERN DIR: the URL of the release's
+# package when DIR holds another one.
+asset_of() { [[ -f $1 ]] && echo "file:${1##*/}" || echo "${1##*/}"; }
+pin() { [[ -f $2 ]] || echo "given:${2##*/}" >"$1/ASSET"; }
+newer_asset() {
+  local url cur; cur=$(cat "$2/ASSET" 2>/dev/null) || cur=""
+  [[ $cur != file:* && $cur != given:* ]] && url=$(latest_asset "$1") && [[ ${url##*/} != "$cur" ]] && echo "$url"
+}
+
+# Download URL (+ URL.sha256), or take FILE (+ FILE.sha256 next to it), into DIR; check the sum. Prints the file path.
+get_checked() {
+  local src=$1 dir=$2 n=${1##*/}
+  if [[ -f $src && $src == *.tar.gz ]]; then
+    echo "using $src" >&2
+    [[ -f $src.sha256 ]] || die "no $src.sha256 next to it: download that too"
+    cp "$src" "$src.sha256" "$dir/"
+  elif [[ $src == https://*.tar.gz ]]; then
+    echo "downloading $n" >&2
+    # (runs in $(...) || die: set -e does not stop it here)
+    curl -fL --retry 3 --progress-bar -o "$dir/$n" "$src" >&2 && curl -fsSL --retry 3 -o "$dir/$n.sha256" "$src.sha256" ||
+      die "download failed: $src (github.com reachable?)"
+  else
+    die "not a https://...tar.gz or FILE.tar.gz (its .sha256 next to it): $src"
+  fi
+  (cd "$dir" && sha256sum -c "$n.sha256" >&2) || die "checksum mismatch: not installing"
+  echo "$dir/$n"
+}
+
+# A package (<name>-<version>-steamframe.tar.gz, one top folder TOP/ with FILES and VERSION) into DEST; the old one
+# is kept as DEST.prev. pkg_fetch TOP DEST "FILES" URL|FILE
+pkg_fetch() {
+  local top=$1 dest=$2 files=$3 src=$4 tmp f
+  tmp=$(mktemp -d); trap "rm -rf '$tmp'" EXIT
+  f=$(get_checked "$src" "$tmp") || exit 1  # it said why
+  [[ $(tar tzf "$f" | sed 's|^\./||; s|/.*||' | sort -u) == "$top" ]] || die "unexpected archive layout (not a $top/ folder)"
+  tar xzf "$f" -C "$tmp"
+  for f in $files VERSION; do [[ -s $tmp/$top/$f ]] || die "package has no $f"; done
+  rm -rf "$dest.prev"; [[ -d $dest ]] && mv "$dest" "$dest.prev"
+  mkdir -p "$data"; mv "$tmp/$top" "$dest"
+  asset_of "$src" >"$dest/ASSET"
+  rm -rf "$tmp"
+}
+# Proton keeps GStreamer's plugin list in the prefix; set aside, it is made again at the next start with the plugin.
+gst_cache_reset() {
+  local f
+  for f in "$apps/compatdata/$appid/gstreamer-1.0"/registry.*.bin; do [[ -f $f ]] && mv -f "$f" "$f.frame-vrc-old"; done
+  return 0
+}
+# The patched FEX, the DFR DXVK and the H.264 plugin: the release's, when they differ from the ones here (offline or
+# none in the release: the ones here). A FEX built or given as a file here stays.
+packages_get() {
+  local url
+  if [[ ! -d $work/stage ]]; then
+    url=$(latest_asset 'fex-eac-.*-steamframe-aarch64\.tar\.gz') ||
+      die "no FEX package in the $repo release: frame-vrc fetch URL|FILE, or frame-vrc build"
+    cmd_fetch "$url"
+  elif [[ -f $work/stage/ASSET || ! -d $work/FEX ]] && url=$(newer_asset 'fex-eac-.*-steamframe-aarch64\.tar\.gz' "$work/stage"); then
+    cmd_fetch "$url"
+  fi
+  if url=$(newer_asset 'dfr-dxvk-.*-steamframe\.tar\.gz' "$dfr_pkg"); then
+    pkg_fetch dfr "$dfr_pkg" "$dfr_files" "$url"
+  elif [[ ! -f $dfr_pkg/VERSION ]]; then
+    die "no DFR package in the $repo release: frame-vrc setup --dfr URL|FILE"
+  fi
+  if url=$(newer_asset 'video-h264-.*-steamframe\.tar\.gz' "$video_pkg"); then
+    pkg_fetch video "$video_pkg" "$video_files" "$url"; gst_cache_reset
+  elif [[ ! -f $video_pkg/VERSION ]]; then
+    echo "frame-vrc: no H.264 package in the release: world videos decode in software" >&2
+  fi
+  if url=$(newer_asset 'wine-mf-.*-steamframe\.tar\.gz' "$mf_pkg"); then
+    pkg_fetch mf "$mf_pkg" "$mf_files" "$url"
+  elif [[ ! -f $mf_pkg/VERSION ]]; then
+    echo "frame-vrc: no audio fix (wine-mf) package in the release" >&2
+  fi
+}
+
+# ---- the Proton copy ------------------------------------------------------------------------------------------
+dfr_vdf() {
+  cat >"$1/compatibilitytool.vdf" <<EOF
+"compatibilitytools"
+{
+  "compat_tools"
+  {
+    "$dfr_tool"
+    {
+      "install_path" "."
+      "display_name" "$dfr_name"
+      "from_oslist" "windows"
+      "to_oslist" "linux"
+    }
+  }
+}
+EOF
+}
+# Steam has the app fully installed and is not updating it: StateFlags has "fully installed" (4) and nothing besides
+# "update required" (2) and "running" (64); downloading, paused, missing or corrupt files fail (as ji10me's setup checks).
+tool_ready() {
+  local f; f=$(sed -n 's/^[[:space:]]*"StateFlags"[[:space:]]*"\([0-9]*\)".*/\1/p' "$(lib_of "$1")/appmanifest_$1.acf" 2>/dev/null)
+  [[ -n $f ]] && ((f & 4)) && ! ((f & ~(4 | 2 | 64)))
+}
+# the mf.dll the copy should have: the audio fix for the Proton it was built for, else Proton's own
+mf_want() {
+  local m=files/lib/wine/x86_64-windows/mf.dll
+  if [[ -f $mf_pkg/mf.dll && $(sha "$proton_exp/$m") == "$mf_tested" ]]; then echo "$mf_pkg/mf.dll"; else echo "$proton_exp/$m"; fi
+}
+# ok, old (Steam updated Proton Experimental, or a new DFR or audio package), missing
+dfr_state() {
+  local dx=files/lib/wine/dxvk/x86_64-windows
+  if [[ ! -f $dfr_dir/proton ]]; then echo missing
+  elif cmp -s "$dfr_dir/version" "$proton_exp/version" && cmp -s "$dfr_dir/$dx/d3d11.dll" "$dfr_pkg/d3d11.dll" &&
+       cmp -s "$dfr_dir/$dx/dxgi.dll" "$dfr_pkg/dxgi.dll" &&
+       cmp -s "$dfr_dir/files/lib/wine/x86_64-windows/mf.dll" "$(mf_want)"; then echo ok
+  else echo old; fi
+}
+# Copied again when Steam updated Proton Experimental or the package changed; the original DLLs kept in dxvk-orig/.
+dfr_copy() {
+  local dx=files/lib/wine/dxvk/x86_64-windows
+  [[ -d $proton_exp ]] || die "Proton Experimental not installed: frame-vrc install-deps"
+  if [[ $(dfr_state) == ok ]]; then
+    grep -qF "\"$dfr_name\"" "$dfr_dir/compatibilitytool.vdf" || dfr_vdf "$dfr_dir"  # an older frame-vrc's name
+    return 0
+  fi
+  quit_first
+  tool_ready 1493710 || die "Steam is updating Proton Experimental (or it is incomplete): wait until Steam is done, then again"
+  local free; free=$(df -Pm "$HOME" | awk 'NR==2{print $4}')
+  ((free > 3072)) || die "less than 3 GB free in $HOME (the copy is ~1.5 GB)"
+  echo "copying Proton Experimental $(cut -d' ' -f2 "$proton_exp/version") to $dfr_dir (~1.5 GB) ..."
+  rm -rf "$dfr_dir.new"; mkdir -p "${dfr_dir%/*}"
+  cp -a "$proton_exp" "$dfr_dir.new"
+  rm -rf "$dfr_dir.new/__pycache__"
+  mkdir -p "$dfr_dir.new/dxvk-orig"
+  mv "$dfr_dir.new/$dx/d3d11.dll" "$dfr_dir.new/$dx/dxgi.dll" "$dfr_dir.new/dxvk-orig/"
+  cp "$dfr_pkg/d3d11.dll" "$dfr_pkg/dxgi.dll" "$dfr_dir.new/$dx/"
+  # ji10me's audio fix (Proton links the prefix's mf.dll to the copy's)
+  local m=files/lib/wine/x86_64-windows/mf.dll
+  if [[ $(mf_want) != "$proton_exp/$m" ]]; then rm -f "$dfr_dir.new/$m"; cp "$mf_pkg/mf.dll" "$dfr_dir.new/$m"; fi
+  dfr_vdf "$dfr_dir.new"
+  rm -rf "$dfr_dir"; mv "$dfr_dir.new" "$dfr_dir"
+}
+
+# Steam lists compatibility tools at start: a new one needs a Steam restart before the game may use it (mapped to a
+# tool Steam has not listed, the game's Properties hang and the launch fails).
+steam_restart() {
+  echo "Steam must restart once so it sees the new Proton. SteamVR restarts with it: in the headset the view goes away"
+  echo "for about a minute, then comes back; this keeps running. Open frame-vrc again to see the rest."
+  local s; for s in 10 8 6 4 2; do echo "restarting Steam in $s s ..."; sleep 2; done
+  echo "restarting Steam now"
+  steamapi restart >/dev/null || true
+  sleep 15
+  local i; for i in $(seq 1 40); do steamapi ping >/dev/null 2>&1 && { echo "Steam is back"; return 0; }; sleep 5; done
+  die "Steam did not come back; start it and run frame-vrc setup again"
+}
+# Steam has the copy listed: its last scan of compatibilitytools.d (at start; a run of "Processing local tool list" and
+# "Registering tool" lines in compat_log.txt, which Steam does not rotate) registered it. No client API lists the tools.
+steam_lists_copy() {
+  awk -v t="$dfr_tool" '
+    /Processing local tool list/ { if (!scan) seen = 0; scan = 1; next }
+    scan && /Registering tool / { if ($5 == t ",") seen = 1; next }
+    { scan = 0 }
+    END { exit !seen }' "$steam/logs/compat_log.txt" 2>/dev/null
+}
+
+# ---- render resolution ----------------------------------------------------------------------------------------
+# SteamVR's per-application setting (Settings > Video), through SteamVR's own vrcmd, which accepts values below the
+# 1440 the settings UI allows. Empty when SteamVR does not answer.
+vrcmd=/opt/steamvr/bin/linuxarm64/vrcmd
+reskey="steam.app.$appid.resolutionOverride"
+res_get() { { timeout 10 "$vrcmd" --settings-int "$reskey" 2>/dev/null || true; } | sed -n "s/^$reskey=//p" | tail -1; }
+
+# ---- commands: versions ---------------------------------------------------------------------------------------
+# Steam installs what is missing; each steam://install opens Steam's own install prompt for the user to confirm.
+cmd_install_deps() {
+  local missing=0 id dir
+  for pair in "3127680:FEX-Emu" "1493710:Proton - Experimental" "1826330:Proton EasyAntiCheat Runtime"; do
+    id=${pair%%:*} dir=${pair#*:}
+    [[ -d "$(lib_of "$id")/common/$dir" ]] && { echo "ok: $dir"; continue; }
+    missing=1
+    echo "asking Steam to install $dir (app $id): confirm in Steam"
+    steam_url "steam://install/$id"
+  done
+  ((missing)) && echo "run frame-vrc setup again when Steam is done" || echo "all installed"
+}
+
+# The PCVR version: the patched FEX, the Proton copy (Steam restarts once when it has not listed it), VRChat's
+# compatibility tool, the resolution, the launch options. Steam updates VRChat to the PC build itself (when it is
+# launched at the latest); a new install opens Steam's install prompt.
+cmd_setup() {
+  local res="" fexsrc="" dfrsrc="" videosrc="" mfsrc="" restarted=0
+  while (($#)); do
+    case $1 in
+      --resolution) res=${2:?--resolution N}; shift 2 ;;
+      --dfr) dfrsrc=${2:?--dfr URL|FILE}; shift 2 ;;
+      --video) videosrc=${2:?--video URL|FILE}; shift 2 ;;
+      --mf) mfsrc=${2:?--mf URL|FILE}; shift 2 ;;
+      *) fexsrc=$1; shift ;;
+    esac
+  done
+  if [[ -n $res ]]; then [[ $res =~ ^[0-9]+$ ]] && ((res >= 360 && res <= 4096)) || die "--resolution: 360-4096 (1056, 1440, 1920)"; fi
+  step() { echo "==> [$1/6] $2"; }
+  step 1 "Checking Steam"
+  steamapi ping >/dev/null 2>&1 || die "Steam does not answer: start Steam, then run this again"
+  [[ -f $acf || $(steamapi owned "$appid" 2>/dev/null) == 1 ]] ||
+    { steam_url "steam://store/$appid"; die "$name is not in your Steam library: add it on its store page (free), then again"; }
+  local d
+  for d in "$fex" "$proton_exp" "$eac_rt"; do
+    [[ -d $d ]] || { cmd_install_deps; die "confirm the installs in Steam, then run frame-vrc setup again"; }
+    echo "ok: ${d##*/}"
+  done
+  quit_first
+  step 2 "Downloading frame-vrc's packages (patched FEX, DFR DXVK, H.264 plugin)"
+  [[ -z $fexsrc ]] || { cmd_fetch "$fexsrc"; pin "$work/stage" "$fexsrc"; }
+  [[ -z $dfrsrc ]] || { pkg_fetch dfr "$dfr_pkg" "$dfr_files" "$dfrsrc"; pin "$dfr_pkg" "$dfrsrc"; }
+  [[ -z $videosrc ]] || { pkg_fetch video "$video_pkg" "$video_files" "$videosrc"; pin "$video_pkg" "$videosrc"; gst_cache_reset; }
+  [[ -z $mfsrc ]] || { pkg_fetch mf "$mf_pkg" "$mf_files" "$mfsrc"; pin "$mf_pkg" "$mfsrc"; }
+  packages_get
+  step 3 "ji10me's runtime with the patched FEX, for $name only"
+  runtime_install
+  pfex_install
+  cfg_set EAC_RUNTIME "$eac_rt"
+  step 4 "$dfr_name"
+  dfr_copy
+  steam_lists_copy || { steam_restart; restarted=1; }
+  set_compat_tool "$dfr_tool" || die "Steam did not take $dfr_name"
+  echo "$name's compatibility tool: $dfr_name"
+  step 5 "Render resolution"
+  [[ -z $res ]] || cfg_set RES "$res"
+  if ((restarted)); then  # SteamVR restarted with Steam: give it a minute to answer
+    local i; for i in $(seq 1 30); do [[ -n $(res_get) ]] && break; sleep 2; done
+  fi
+  (res_apply) || echo "frame-vrc: start SteamVR and run: frame-vrc resolution $(cfg RES)" >&2
+  step 6 "Launch options"
+  cmd_launch_options set
+  local k; for k in PROTON VIDEO DFR CPUS DXVK_THREADS VRAM; do cfg_unset $k; done  # older frame-vrc's settings
+  # last: frame-vrc 0.7's patched build out of Steam's FEX-Emu, once the above no longer needs it there
+  steam_fex_restore || echo "frame-vrc: $name does not need it any more; other games run on it as it is" >&2
+  if [[ -f $acf ]]; then
+    echo "patched: update and launch $name (Steam updates it to the PC build first when needed)"
+  else
+    echo "patched: install $name now (~1.1 GB): confirm Steam's install prompt"
+    steam_url "steam://install/$appid"
+  fi
+}
+
+# The official version: Lepton (Steam updates VRChat to the Android build), your own launch options (none, as Steam
+# ships them) and resolution. The patched FEX and the Proton copy stay, to switch back with frame-vrc setup;
+# frame-vrc uninstall removes them. --quiet: no closing line (uninstall goes on).
+cmd_official() {
+  quit_first
+  steamapi ping >/dev/null 2>&1 || die "Steam does not answer: start Steam, then run this again"
+  # also when VRChat is not installed: the choice stays in Steam and would install it on a deleted tool later
+  local tool; tool=$(compat_tool)
+  if [[ -n $tool && $tool != lepton* ]]; then
+    set_compat_tool lepton || die "Steam did not take Lepton"
+    echo "$name's compatibility tool: Lepton (the official version; Steam updates $name to it)"
+  fi
+  if ours "$(opts_get 2>/dev/null || true)"; then cmd_launch_options clear; fi
+  if [[ -f $data/resolution.$appid.prev ]]; then (cmd_resolution reset) || echo "frame-vrc: start SteamVR and run: frame-vrc resolution reset" >&2; fi
+  [[ ${1:-} == --quiet ]] && return
+  steam_fex_restore || true  # it said why; uninstall insists
+  echo "official version (Valve's setup): launch $name (Steam updates it to the official build first when needed)."
+  echo "Back to the PCVR version: frame-vrc setup"
+}
+
+# ---- commands: checks -----------------------------------------------------------------------------------------
+# JSON string (the texts here hold no control characters)
+jstr() { local v=${1//\\/\\\\}; printf '"%s"' "${v//\"/\\\"}"; }
+
+# The one thing to do now, for a new user and the panel's home page: sets ns_step, ns_fix (the frame-vrc arguments
+# that do it, "" = none), ns_alt (a second choice), ns_text and ns_opts (the launch options). Read from what is there
+# when asked, never waited for: Steam shows its own download progress, the user checks again when it is done.
+next_step() {
+  local ed
+  ns_fix="" ns_alt="" ns_opts=""
+  if ! ns_opts=$(opts_get 2>/dev/null) || ! steamapi ping >/dev/null 2>&1; then
+    ns_step=steam ns_text="Steam does not answer: start Steam, then check again"
+    return
+  fi
+  ed=$(edition)
+  if [[ -d $apps/downloading/$appid ]]; then
+    ns_step=download ns_text="Steam is downloading $name; check again when it is done"
+  elif [[ -z $ed && $(steamapi owned "$appid" 2>/dev/null) != 1 ]]; then
+    ns_step=own ns_fix=store ns_text="$name is not in your Steam library: it is free; add it on its store page, then check again"
+  elif [[ -z $ed ]]; then
+    ns_step=game ns_fix=setup
+    ns_text="$name is not installed: set up the PCVR version (then confirm Steam's install prompt), or install the"
+    ns_text+=" official version from the Steam store as usual"
+  elif [[ $ed == official ]]; then
+    ns_step=official ns_fix=setup
+    ns_text="the official version (Lepton, Valve's setup)"
+    if ours "$ns_opts"; then ns_alt=official ns_text+="; frame-vrc's launch options are still set (official clears them)"; fi
+    [[ $(game_build) != pc ]] || ns_text+=": launch $name, Steam updates it to the official build first"
+  elif [[ ! -d $fex || ! -d $proton_exp || ! -d $eac_rt ]]; then
+    ns_step=deps ns_fix=install-deps ns_text="Steam has to install FEX-Emu, Proton Experimental and the EasyAntiCheat runtime"
+  elif [[ $ed != community || $(pfex_state) == missing || $(dfr_state) == missing || $ns_opts != "$(run_line)" ]]; then
+    ns_step=patch ns_fix=setup ns_alt=official
+    ns_text="the PCVR version is not fully set up (patched FEX, $dfr_name, $name's compatibility tool, launch options)"
+  else
+    # Steam updates VRChat to the PC build when it is launched: nothing to wait for here
+    ns_fix=launch ns_alt=official
+    if [[ -f $gamedir/$name.exe ]]; then ns_step=ready ns_text="ready: launch $name"
+    else ns_step=update ns_text="patched: update and launch $name (Steam updates it to the PC build first)"; fi
+    # an older copy or FEX still runs: setup brings the new one
+    [[ $(pfex_state) == ok && $(dfr_state) == ok ]] || ns_text+=". An update of frame-vrc's parts is ready: apply again (setup)"
+  fi
+}
+
+cmd_next() {
+  next_step
+  if [[ ${1:-} == --json ]]; then
+    printf '{"step":%s,"fix":%s,"alt":%s,"text":%s}\n' "$(jstr "$ns_step")" "$(jstr "$ns_fix")" "$(jstr "$ns_alt")" "$(jstr "$ns_text")"
+    return
+  fi
+  echo "next: $ns_text"
+  [[ -z $ns_fix ]] || echo "  frame-vrc $ns_fix"
+  [[ -z $ns_alt ]] || echo "  or: frame-vrc $ns_alt"
+}
+
+cmd_status() {
+  local s res tool launch rt
+  next_step
+  s=$(pfex_state) res=$(res_get) tool=$(compat_tool)
+  rt=$(cat "$pfex/.frame-vrc-runtime" 2>/dev/null) || rt=""
+  if [[ $ns_opts == "$(run_line)" ]]; then launch=set
+  elif ours "$ns_opts"; then launch=stale
+  elif [[ -z $ns_opts ]]; then launch=none
+  else launch=other; fi
+  if [[ ${1:-} == --json ]]; then
+    local run=false; running && run=true
+    # DFR is always on in ji10me's runtime
+    printf '{"version":%s,"fex":%s,"fex_build":%s,"proton":%s,"steam_tool":%s,"resolution":%s,"dfr":"on","runtime":%s,' \
+      "$(jstr $VERSION)" "$(jstr "$s")" "$(jstr "$(describe "$pfex")")" "$(jstr "$(dfr_state)")" "$(jstr "$tool")" \
+      "${res:-0}" "$(jstr "$rt")"
+    printf '"dfr_effective":"on","video":%s,"launch":%s,"game_running":%s,' \
+      "$(jstr "$([[ -f $video_pkg/VERSION ]] && echo hw || echo sw)")" "$(jstr $launch)" $run
+    printf '"next_step":%s,"next_fix":%s,"next_alt":%s,"build":%s,"edition":%s,"swap_file_mb":%s,"zram_mb":%s}\n' \
+      "$(jstr "$ns_step")" "$(jstr "$ns_fix")" "$(jstr "$ns_alt")" "$(jstr "$(game_build)")" "$(jstr "$(edition)")" \
+      "$(swap_mb /home/swapfile | grep . || echo 0)" "$(swap_mb /dev/zram0 | grep . || echo 0)"
+    return
+  fi
+  echo "frame-vrc $VERSION"
+  echo "  next        $ns_text"
+  echo "  version     $(edition) (Steam's tool: ${tool:-default}; installed build: $(game_build))"
+  echo "  fex         $s ($(describe "$pfex")); Steam's FEX-Emu: $(describe "$fex")"
+  echo "  proton      $(dfr_state) ($dfr_name)"
+  echo "  resolution  ${res:-? (start SteamVR)} (frame-vrc: $(cfg RES))"
+  echo "  runtime     ${rt:-not set up} (session supervisor: $(runtime_state))"
+  echo "  video       $([[ -f $video_pkg/VERSION ]] && echo "H.264 hardware ($(head -1 "$video_pkg/VERSION" | cut -d: -f1))" || echo "software (no package)")"
+  echo "  audio fix   $([[ $(mf_want) == "$mf_pkg/mf.dll" ]] && head -1 "$mf_pkg/VERSION" | cut -d: -f1 || echo "not used (no package, or another Proton Experimental)")"
+  echo "  launch      $launch"
+}
+
+# Each row: level, group, text and the frame-vrc command that fixes it ("" = none). --json: one array of rows (the VR
+# panel draws it and offers the fixes as buttons).
+cmd_doctor() {
+  local bad=0 json=false group="" rows=()
+  [[ ${1:-} == --json ]] && json=true
+  row() {  # LEVEL FIX TEXT
+    [[ $1 == fail ]] && bad=1
+    if $json; then
+      rows+=("{\"group\":$(jstr "$group"),\"level\":$(jstr "$1"),\"text\":$(jstr "$3"),\"fix\":$(jstr "$2")}")
+    else
+      local l; case $1 in ok) l="ok  " ;; warn) l=WARN ;; *) l=FAIL ;; esac
+      printf '  %s  %s%s\n' "$l" "$3" "${2:+: frame-vrc $2}"
+    fi
+  }
+  section() { group=$1; $json || echo "$1"; }
+  $json || echo "frame-vrc $VERSION doctor"
+  section device
+  if grep -q '^VARIANT_ID="\?vr' /etc/os-release && [[ $(uname -m) == aarch64 ]]; then
+    row ok "" "Steam Frame: SteamOS $(sed -n 's/^VERSION_ID=//p' /etc/os-release) build $(sed -n 's/^BUILD_ID=//p' /etc/os-release)"
+  else
+    row fail "" "not a Steam Frame (SteamOS VARIANT_ID=vr, aarch64)"
+  fi
+  row ok "" "memory $(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo) MB available of $(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo) MB; max temperature $(($(maxtemp | grep . || echo 0) / 1000)) C"
+  local free; free=$(df -Pm "$HOME" | awk 'NR==2{print $4}')
+  ((free > 3072)) && row ok "" "disk: $((free / 1024)) GB free" || row warn "" "disk: $free MB free (Proton copy requires 3 GB)"
+  curl -fsI -m 5 https://github.com >/dev/null 2>&1 && row ok "" "network: github.com reachable" ||
+    row warn "" "network: github.com unreachable (required for setup and update)"
+  section steam
+  steamapi ping >/dev/null 2>&1 && row ok "" "Steam is running" || row fail "" "Steam is not responding (start Steam)"
+  [[ -d $fex ]] && row ok "" "FEX-Emu $(describe "$fex")" || row "$([[ $(edition) == official ]] && echo ok || echo fail)" install-deps "FEX-Emu not installed"
+  [[ $(describe "$fex") != eac-* ]] || row warn "" "Steam's FEX-Emu contains a legacy patched build (run setup or official to restore Valve's build)"
+  local ed tool dep=fail; ed=$(edition) tool=$(compat_tool)
+  [[ $ed == official ]] && dep=ok  # the official version needs none of Steam's x86 tools
+  [[ -d $proton_exp ]] && row ok "" "Proton Experimental $(cut -d' ' -f2 "$proton_exp/version" 2>/dev/null)" || row $dep install-deps "Proton Experimental not installed"
+  [[ -d $eac_rt ]] && row ok "" "Proton EasyAntiCheat Runtime" || row $dep install-deps "Proton EasyAntiCheat Runtime not installed"
+  section "$name"
+  case $ed in
+    "") [[ $(steamapi owned "$appid" 2>/dev/null) == 1 ]] && row fail setup "not installed" || row fail store "not in your Steam library" ;;
+    official) row ok "" "official version (compatibility tool ${tool:-default}: Lepton)" ;;
+    other) row fail setup "compatibility tool '$tool': EAC requires $dfr_name" ;;
+    community) row ok "" "PCVR version ($dfr_name)" ;;
+  esac
+  case $(game_build) in
+    pc) row ok "" "PC build installed" ;;
+    android) [[ $ed == official ]] && row ok "" "Android build installed" ||
+               row warn "" "PC build pending download in Steam (Library > $name > Update)" ;;
+  esac
+  local cur; cur=$(opts_get 2>/dev/null || true)
+  if [[ $ed == official ]]; then
+    ours "$cur" && row warn official "frame-vrc launch options are still set" || row ok "" "launch options: ${cur:-none}"
+  elif [[ $cur == "$(run_line)" ]]; then row ok "" "launch options configured"
+  elif ours "$cur"; then row warn "launch-options set" "outdated frame-vrc launch options"
+  elif [[ -n $cur ]]; then row fail "launch-options set" "custom launch options detected (set replaces them; official restores them)"
+  else row fail "launch-options set" "launch options not set"; fi
+  section "frame-vrc"
+  # the official version needs none of it: what is missing is only a note there
+  local miss=fail mfix=setup ofix=setup; [[ $ed == official ]] && miss=ok mfix="" ofix=packages
+  case $(pfex_state) in
+    ok) row ok "" "patched FEX: $(describe "$pfex")" ;;
+    old) row warn $ofix "patched FEX $(describe "$pfex"): update available" ;;
+    missing) row $miss "$mfix" "patched FEX not configured" ;;
+  esac
+  [[ -f $dfr_pkg/VERSION ]] && row ok "" "DFR package: $(cat "$dfr_pkg/VERSION")" || row $miss "$mfix" "DFR package not installed"
+  case $(dfr_state) in
+    ok) row ok "" "$dfr_name (Proton Experimental $(cut -d' ' -f2 "$dfr_dir/version"))" ;;
+    old) row warn $ofix "$dfr_name is outdated (update available)" ;;
+    missing) row $miss "$mfix" "$dfr_name not configured" ;;
+  esac
+  local rt; rt=$(cat "$pfex/.frame-vrc-runtime" 2>/dev/null) || rt=""
+  if [[ -n $rt ]]; then
+    [[ $rt == *"thunks on"* ]] && row ok "" "runtime: $rt" || row warn "" "runtime: $rt (Vulkan thunks disabled)"
+  fi
+  [[ $(runtime_state) == ok ]] && row ok "" "session supervisor and eye-tracking bridge built" || row $miss "$mfix" "session supervisor and eye-tracking bridge not built"
+  [[ $(mf_want) == "$mf_pkg/mf.dll" ]] && row ok "" "audio fix (mf.dll): $(head -1 "$mf_pkg/VERSION")" ||
+    row ok "" "audio fix (mf.dll): inactive (package missing or Proton version mismatch)"
+  [[ -f $video_pkg/VERSION ]] && row ok "" "H.264 hardware video: $(head -1 "$video_pkg/VERSION")" || row "$([[ $miss == ok ]] && echo ok || echo warn)" "$mfix" "H.264 hardware video package not installed"
+  [[ -f $HOME/.config/openvr/openvrpaths.vrpath ]] && row ok "" "OpenVR path registry" || row warn "" "no ~/.config/openvr/openvrpaths.vrpath: start SteamVR once"
+  if $json; then (IFS=,; echo "[${rows[*]}]"); return $bad; fi
+  ((bad == 0)) && echo "all set" || { echo "fix the FAIL lines above"; return 1; }
+}
+
+# ---- commands: FEX --------------------------------------------------------------------------------------------
+cmd_build() {
+  local jobs=4
+  [[ "${1:-}" == --jobs ]] && jobs=${2:?--jobs N}
+  local t; for t in clang cmake ninja ld.lld git python3; do command -v $t >/dev/null || die "missing $t"; done
+  local free; free=$(df -Pm "$HOME" | awk 'NR==2{print $4}')
+  ((free > 5120)) || die "less than 5 GB free in $HOME"
+  echo "Building the patched FEX with $jobs jobs (about 5 minutes on 4; the headset gets hot, up to ~98 C measured)."
+  echo "Keep it on power and off your head. It stops by itself at 100 C; Ctrl-C stops it too, re-running continues."
+  mkdir -p "$work"
+  local start=$SECONDS rc=0 bpid
+  # Own session, so the heat guard and Ctrl-C can stop every compiler process at once.
+  JOBS=$jobs setsid bash -o pipefail -c 'sh "$0" 2>&1 | tee "$1"' "$lib/build-fex.sh" "$work/build.log" &
+  bpid=$!
+  trap 'pkill -TERM -s "$bpid" 2>/dev/null; die "build stopped; run frame-vrc build again to continue"' INT TERM
+  (while kill -0 "$bpid" 2>/dev/null; do
+     if (($(maxtemp) >= 100000)); then echo "frame-vrc: 100 C reached, stopping the build" >&2; pkill -TERM -s "$bpid"; fi
+     sleep 10
+   done) &
+  wait "$bpid" || rc=$?
+  trap - INT TERM
+  ((rc == 0)) || die "build failed (exit $rc), log: $work/build.log"
+  rm -f "$work/stage/ASSET"  # built here: no release's package replaces it
+  echo "built in $(((SECONDS - start) / 60)) min $(((SECONDS - start) % 60)) s: $(describe "$work/stage"). Next: frame-vrc setup"
+}
+
+# The built stage as a release asset for others to fetch: fex-<describe>-steamframe-aarch64.tar.gz + .sha256
+cmd_pack() {
+  [[ -d $work/stage ]] || die "no build in $work/stage"
+  local d n; d=$(describe "$work/stage"); n="fex-$d-steamframe-aarch64.tar.gz"
+  # FEX is MIT: its license travels with the binaries.
+  [[ -f $work/stage/LICENSE.FEX ]] || cp "$work/FEX/LICENSE" "$work/stage/LICENSE.FEX" 2>/dev/null ||
+    die "FEX's LICENSE not found in $work/FEX: needed in a package for others"
+  mkdir -p "$data/dist"
+  tar czf "$data/dist/$n" -C "$work" stage
+  (cd "$data/dist" && sha256sum "$n" >"$n.sha256")
+  echo "upload both to a GitHub release:"
+  ls -l "$data/dist/$n" "$data/dist/$n.sha256"
+}
+
+# A packed build (cmd_pack) instead of building: checked against its .sha256 before it is unpacked; the current stage
+# is kept as stage.prev.
+cmd_fetch() {
+  local src=${1:-${FRAME_VRC_FEX_URL:-}} tmp f
+  tmp=$(mktemp -d); trap "rm -rf '$tmp'" EXIT
+  [[ -n $src ]] || die "usage: frame-vrc fetch https://.../fex-<version>-steamframe-aarch64.tar.gz | FILE.tar.gz (its .sha256 next to it)"
+  f=$(get_checked "$src" "$tmp") || exit 1  # it said why
+  [[ $(tar tzf "$f" | sed 's|^\./||; s|/.*||' | sort -u) == stage ]] || die "unexpected archive layout (not a stage/ folder)"
+  tar xzf "$f" -C "$tmp"
+  for f in $bins; do [[ -s $tmp/stage/usr/bin/$f ]] || die "download has no usr/bin/$f"; done
+  for f in $files; do [[ -s $tmp/stage/$f ]] || die "download has no $f"; done
+  "$tmp/stage/usr/bin/FEXGetConfig" --version >/dev/null || die "the downloaded FEX does not run on this machine"
+  mkdir -p "$work"
+  [[ -d $work/stage ]] && { rm -rf "$work/stage.prev"; mv "$work/stage" "$work/stage.prev"; }
+  mv "$tmp/stage" "$work/stage"
+  asset_of "$src" >"$work/stage/ASSET"
+  rm -rf "$tmp"  # the EXIT trap may be another's by then (pkg_fetch sets its own)
+  echo "fetched: $(describe "$work/stage")"
+}
+
+# ---- commands: settings ---------------------------------------------------------------------------------------
+# While a video plays in the game: is the plugin loaded and the hardware decoder open?
+# DFR check, from the next VRChat start: magenta dots where the eyes look (DXVK_GAZE_DOT) and DXVK's log with the
+# GazeVRS lines (DXVK_GAZE_DEBUG) in $data/dfrtest. off: both gone. A new FEX copy (setup, update) is without them.
+cmd_dfrtest() {
+  local t=$data/dfrtest g=$HOME/.local/share/frame-pcvr/gaze/frame-gaze-v1.bin
+  [[ -f $pfex/emulator.json ]] || die "the PCVR version is not set up: frame-vrc setup"
+  case ${1:-status} in
+    on|off)
+      mkdir -p "$t"
+      python3 -I - "$pfex/emulator.json" "$1" "Z:$t" <<'PYE' || die "could not change $pfex/emulator.json"
+import json, sys
+p, mode, log = sys.argv[1:]
+with open(p) as f:
+    e = json.load(f)
+ce = e["emulator_v0"]["container_environment"]
+ce.update(DXVK_GAZE_DOT="1" if mode == "on" else "0", DXVK_GAZE_DEBUG="1" if mode == "on" else "0")
+if mode == "on":  # Proton turns DXVK's log off unless it is set
+    ce.update(DXVK_LOG_PATH=log, DXVK_LOG_LEVEL="info")
+else:
+    ce.pop("DXVK_LOG_PATH", None)
+    ce.pop("DXVK_LOG_LEVEL", None)
+with open(p, "w") as f:
+    json.dump(e, f, indent=2)
+PYE
+      [[ $1 == on ]] && rm -f "$t"/*.log && echo "DFR test on: start VRChat; magenta dots follow your eyes in the 3D view (not in menus). Then: frame-vrc dfrtest" ||
+        echo "DFR test off (from the next VRChat start)" ;;
+    status)
+      echo "  test mode   $(grep -q '"DXVK_GAZE_DOT": "1"' "$pfex/emulator.json" && echo on || echo off)"
+      if pgrep -x VRChat.exe >/dev/null; then
+        pgrep -f "$runtime/gaze-bridge" >/dev/null && echo "  bridge      running" || echo "  bridge      not running (starts once SteamVR's eye tracking is ready)"
+        if [[ -f $g ]]; then
+          # the bridge writes through a mapping: the contents change, the file time may not
+          local a; a=$(cksum <"$g"); sleep 1
+          [[ $(cksum <"$g") != "$a" ]] && echo "  gaze file   updating" || echo "  gaze file   not updating (eye tracking off or not calibrated?)"
+        else echo "  gaze file   missing"; fi
+      else echo "  VRChat      not running"; fi
+      local l; l=$(ls -t "$t"/*d3d11.log 2>/dev/null | head -1) || true
+      [[ -n $l ]] && { echo "  DXVK log    $l"; grep -a 'GazeVRS' "$l" | grep -av ':   ' | tail -6 | sed 's/^/    /'; } ||
+        echo "  DXVK log    none yet (test mode on, then start VRChat)" ;;
+    *) die "usage: frame-vrc dfrtest [on|off]" ;;
+  esac
+}
+
+video_check() {
+  local p n
+  p=$(pgrep -x VRChat.exe | head -1) || die "VRChat is not running: play a video in a world, then run this"
+  grep -q libgstvideo4linux2 "/proc/$p/maps" && echo "  plugin loaded" || echo "  plugin not loaded (no video played yet?)"
+  n=$(find "/proc/$p/fd" -lname '/dev/video*' 2>/dev/null | wc -l)
+  ((n > 0)) && echo "  hardware decoder open ($n)" || echo "  hardware decoder not open"
+}
+
+
+# The resolution frame-vrc keeps (RES) into SteamVR; the value before frame-vrc is kept once, for official/uninstall.
+res_apply() {
+  local cur want prev=$data/resolution.$appid.prev
+  [[ -x $vrcmd ]] || die "SteamVR's vrcmd not found ($vrcmd)"
+  cur=$(res_get) want=$(cfg RES)
+  [[ -n $cur ]] || die "SteamVR did not answer: start SteamVR (VR mode) and try again"
+  [[ -f $prev ]] || { mkdir -p "$data"; echo "$cur" >"$prev"; }
+  [[ $cur == "$want" ]] || timeout 10 "$vrcmd" --set-settings-int "$reskey" "$want" >/dev/null
+  [[ $(res_get) == "$want" ]] || die "SteamVR did not take $want"
+  echo "$name render resolution: $want$([[ $cur == "$want" ]] || echo " (was $cur)")"
+}
+cmd_resolution() {
+  local op=${1:-show} prev=$data/resolution.$appid.prev
+  case $op in
+    show) echo "$name render resolution: $(res_get) (frame-vrc: $(cfg RES)$([[ -f $prev ]] && echo ", before frame-vrc: $(cat "$prev")"))" ;;
+    reset)
+      [[ -x $vrcmd ]] || die "SteamVR's vrcmd not found ($vrcmd)"
+      [[ -f $prev ]] || { echo "not changed by frame-vrc: $(res_get)"; return; }
+      timeout 10 "$vrcmd" --set-settings-int "$reskey" "$(cat "$prev")" >/dev/null
+      [[ $(res_get) == "$(cat "$prev")" ]] || die "SteamVR did not take the old value (start SteamVR)"
+      rm -f "$prev"; echo "$name render resolution back to $(res_get)" ;;
+    *)
+      [[ $op =~ ^[0-9]+$ ]] && ((op >= 360 && op <= 4096)) || die "usage: frame-vrc resolution 1056|1440|1920 (advanced: 1600, 2160, any N 360-4096)"
+      cfg_set RES "$op"
+      # the official version keeps its own resolution; frame-vrc's applies when the community version is chosen
+      if [[ $(edition) == official ]]; then echo "saved: $op (applies with the community version)"; return; fi
+      res_apply
+      echo "applies the next time the game starts" ;;
+  esac
+}
+
+# The panel collects taps and sends them together: apply resolution=N
+cmd_apply() {
+  local kv
+  for kv; do
+    case ${kv%%=*} in
+      resolution) cmd_resolution "${kv#*=}" ;;
+      *) die "usage: frame-vrc apply resolution=N (the other settings are ji10me's tested ones)" ;;
+    esac
+  done
+}
+
+cmd_launch_options() {
+  local op=${1:-show} prev=$data/launch-options.$appid.prev cur
+  cur=$(opts_get)
+  case $op in
+    show) echo "$name ($appid): ${cur:-<empty>}"; ours "$cur" && echo "(set by frame-vrc)" || true ;;
+    set)
+      local want; want=$(run_line)
+      [[ "$cur" == "$want" ]] && { echo "launch options: already set"; return; }
+      # Keep what the user had, so clear puts it back.
+      if [[ -n $cur ]] && ! ours "$cur"; then mkdir -p "$data"; printf '%s' "$cur" >"$prev"; echo "previous options kept in $prev"; fi
+      opts_set "$want"
+      echo "launch options: frame-vrc-run %command%" ;;
+    clear)
+      local back=""; [[ -f $prev ]] && back=$(cat "$prev")
+      ours "$cur" || [[ -z $cur ]] || die "the current options were not set by frame-vrc; not touching them"
+      opts_set "$back"
+      rm -f "$prev"
+      [[ -n $back ]] && echo "launch options: restored your own" || echo "launch options: cleared (as Steam ships them)" ;;
+    *) die "usage: frame-vrc launch-options show|set|clear" ;;
+  esac
+}
+
+# ---- swap -----------------------------------------------------------------------------------------------------
+# SteamOS swaps to zram (half the RAM, 8 GB) first, then to /home/swapfile: 1 GB as shipped (swapfile.service), 8 GB
+# through a systemd drop-in. Both need root, and frame-vrc never uses sudo: it shows the commands to run in a terminal
+# (VRChat closed: swapoff moves the file's pages back into RAM).
+swap_dropin=/etc/systemd/system/swapfile.service.d/50-size.conf
+swap_mb() { awk -v f="$1" '$1 == f {print int($3 / 1024)}' /proc/swaps; }  # a swap's size in MB (empty: not on)
+cmd_swap() {
+  local file zram; file=$(swap_mb /home/swapfile) zram=$(swap_mb /dev/zram0)
+  case ${1:-} in
+    "")
+      echo "swap: zram ${zram:-0} MB, swap file ${file:-0} MB$([[ -f $swap_dropin ]] && echo " (8 GB setting: $swap_dropin)")"
+      echo "change: frame-vrc swap 8g | 1g (shows the commands; they need root)" ;;
+    8g | 1g)
+      if [[ $1 == 8g ]]; then  # 8 GB of file plus room for Steam's updates (ji10me's setup keeps 20 GB free)
+        local avail; avail=$(df -Pm /home | awk 'NR==2{print $4}')
+        ((avail - ${file:-0} > 8192 + 20480)) || echo "frame-vrc: only $((avail / 1024)) GB free in /home: the 8 GB swap file would leave too little" >&2
+      fi
+      echo "Run these in a terminal (Konsole) with VRChat closed; each sudo asks for your password:"
+      if [[ $1 == 8g ]]; then
+        echo "  sudo mkdir -p ${swap_dropin%/*}"
+        echo "  printf '[Service]\nExecStart=\nExecStart=/usr/bin/mkswap --file /home/swapfile --size 8192M\n' | sudo tee $swap_dropin"
+      else
+        echo "  sudo rm -f $swap_dropin"
+      fi
+      echo "  sudo swapoff /home/swapfile && sudo rm /home/swapfile"
+      echo "  sudo systemctl daemon-reload && sudo systemctl restart swapfile.service home-swapfile.swap"
+      echo "then: frame-vrc swap  (the swap file: $([[ $1 == 8g ]] && echo 8192 || echo 1024) MB)" ;;
+    *) die "usage: frame-vrc swap [8g|1g]" ;;
+  esac
+}
+
+# ---- commands: play, measure, update, undo --------------------------------------------------------------------
+# Through Steam's client API (as its Play button). Not "steam steam://... &": started from the VR panel, this runs in a
+# systemd unit, and systemd stops a backgrounded helper when we exit, before it passes the URL on. Then waits for
+# the game's launch to show up (Steam's reaper with AppId=438100, or VRChat.exe).
+cmd_launch() {
+  running && { echo "$name is already running"; return; }
+  echo "asking Steam to start $name ..."
+  steamapi run "$appid" >/dev/null 2>&1 || timeout 30 steam "steam://rungameid/$appid" >/dev/null 2>&1 || true
+  # the build for the chosen version is not there yet: Steam updates VRChat first, then starts it
+  if [[ $(edition) == community && ! -f $gamedir/$name.exe ]] || [[ $(edition) == official && $(game_build) == pc ]]; then
+    echo "Steam updates $name first (shown in Steam), then starts it"; return
+  fi
+  local i; for i in $(seq 1 20); do running && { echo "$name is starting (the first world join takes a few minutes)"; return; }; sleep 1; done
+  die "Steam did not start $name: start it from the Steam library"
+}
+
+cmd_bench() {
+  mkdir -p "$data/bench"
+  local stamp out log
+  stamp=$(date +%Y%m%d-%H%M%S)
+  log="$data/bench/$appid-$stamp.log" out="$data/bench/$appid-$stamp.md"
+  echo "Start $name from Steam now; sampling begins when it starts and ends when it exits (every 5 s, read only)."
+  touch "$log.start"  # logs written after this are this session's
+  local summary
+  summary=$(python3 -I "$lib/game-bench.py" "$appid" "$log" 600) || die "no game launch seen within 10 minutes"
+  # EAC and the game's own milestones: counts only, never log contents.
+  local eac="$apps/compatdata/$appid/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat"
+  local keys
+  # EAC keeps its launcher log a few folders down; the game folder also holds big caches, so only its top level.
+  keys=$({ find "$eac" -type f -name '*.log' -newer "$log.start" -print0
+           find "$gamelog" -maxdepth 1 -type f -name '*.txt' -newer "$log.start" -print0; } 2>/dev/null |
+    xargs -0r grep -hoE "Launcher finished with: [0-9]+|AntiCheat Session (Begin|End): [A-Za-z]+|Finished entering world|null client" |
+    sort | uniq -c | sed 's/^ */- /')
+  {
+    echo "## frame-vrc bench: $name"
+    echo
+    echo "| | |"
+    echo "|---|---|"
+    echo "| frame-vrc | $VERSION |"
+    echo "| SteamOS | $(sed -n 's/^VERSION_ID=//p' /etc/os-release) build $(sed -n 's/^BUILD_ID=//p' /etc/os-release), kernel $(uname -r) |"
+    echo "| FEX | $(describe "$pfex") |"
+    echo "| settings | resolution $(res_get), runtime $(cat "$pfex/.frame-vrc-runtime" 2>/dev/null) |"
+    echo "$summary"
+    echo
+    echo "EAC / game milestones:"
+    echo "${keys:-- none found}"
+    rm -f "$log.start"
+    echo
+    echo "How it went (fill in): world, players around, smoothness, crashes:"
+  } >"$out"
+  cat "$out"
+  echo
+  echo "saved: $out (raw samples: $log)"
+}
+
+# A release through get.sh (the same as a new install; settings are kept): the latest, VERSION (an older one too, to
+# go back) or --rc, the newest release or pre-release. Its install.sh then runs "packages".
+cmd_update() {
+  local ver=${1:-} ref=main
+  # a pre-release stays on the newest release or pre-release ("latest" is the last stable one, maybe older)
+  [[ -n $ver || $VERSION != *-rc* ]] || ver=--rc
+  if [[ $ver == --rc ]]; then
+    ver=$(release_json "?per_page=30" | python3 -I -c '
+import json, re, sys
+def key(tag):  # 0.8.0-rc2 < 0.8.0
+    m = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(?:-rc(\d+))?", tag)
+    return (int(m[1]), int(m[2]), int(m[3]), int(m[4] or 1 << 30)) if m else ()
+print(max((r["tag_name"] for r in json.load(sys.stdin) if not r["draft"]), key=key)[1:])') ||
+      die "could not list the releases (github.com reachable?)"
+  fi
+  if [[ -n $ver ]]; then
+    [[ $ver =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]] || die "usage: frame-vrc update [VERSION|--rc]"
+    ref=v$ver  # that release's own get.sh: older ones know only their own version format
+  fi
+  # Versions before 0.8.0-rc4 know nothing of frame-vrc-run or the private FEX: the official version first, then set
+  # that version up with its own commands.
+  if [[ $ver =~ ^0\.[0-7]\. || $ver =~ ^0\.8\.0-rc[0-3]$ ]]; then
+    echo "going back to $ver: the official version first (set up $ver afterwards with its own commands)"
+    cmd_official --quiet
+  fi
+  curl -fsSL "https://raw.githubusercontent.com/$repo/$ref/get.sh" | FRAME_VRC_VERSION=$ver bash ||
+    die "update failed${ver:+ (is there a release $ver?)}"
+}
+
+# After an update (install.sh runs this), for a community version already set up: this release's packages, the
+# patched FEX and the Proton copy where they changed, the launch options in this version's form. Nothing else in Steam.
+cmd_packages() {
+  local cur
+  if running; then
+    echo "frame-vrc: $name is running: the packages are updated by the next frame-vrc setup" >&2
+  elif [[ -x $pfex/fex-compat-tool || -d $dfr_dir ]]; then
+    cur=$(opts_get 2>/dev/null || true)
+    if [[ $(compat_tool) != "$dfr_tool" && $cur == *EAC_LAUNCHERDIR=* ]]; then
+      # frame-vrc 0.7 on plain Proton Experimental: it keeps working as it is until the user chooses
+      echo "frame-vrc 0.8: choose the PCVR version (frame-vrc setup) or the official one (frame-vrc official)"
+    else
+      # in a subshell: a step that stops (Steam not answering, disk full) leaves the rest as it was, never half moved
+      (
+        packages_get
+        runtime_install
+        pfex_install
+        [[ ! -d $dfr_dir ]] || dfr_copy
+        if ours "$cur" && [[ $cur != "$(run_line)" ]]; then opts_set "$(run_line)"; echo "launch options: frame-vrc-run %command%"; fi
+        [[ $(compat_tool) != "$dfr_tool" ]] || steam_fex_restore || true
+      ) || echo "frame-vrc: not everything was updated; frame-vrc setup finishes it" >&2
+    fi
+  fi
+  local f d v
+  f=$(describe "$pfex") || true
+  d=$(cut -d' ' -f2 "$dfr_pkg/VERSION" 2>/dev/null) || true
+  v=$(head -1 "$video_pkg/VERSION" 2>/dev/null | cut -d' ' -f2 | tr -d :) || true
+  echo "packages: FEX ${f:-not set up}, DFR ${d:-none}, H.264 ${v:-none}"
+}
+
+cmd_panel() {
+  [[ -x $here/frame-vrc-panel ]] || die "the VR panel is not built (install.sh builds it; needs cmake, ninja, g++)"
+  exec "$here/frame-vrc-panel" --show "$@"
+}
+
+# Everything frame-vrc added goes: VRChat back on Lepton (the official version: Proton Experimental alone cannot run
+# it), your launch options and resolution, the Proton copy, the patched FEX, frame-vrc. --purge: also its downloads,
+# settings and bench reports. Steam must answer: a game left on a deleted tool cannot start.
+cmd_uninstall() {
+  local purge=false listed=false
+  [[ "${1:-}" == --purge ]] && purge=true
+  cmd_official --quiet
+  # before anything is deleted: frame-vrc 0.7's build out of Steam's FEX-Emu (its backup is in $work)
+  steam_fex_restore || die "not uninstalled: Steam's FEX-Emu must get Valve's build back first (see above)"
+  steam_lists_copy && listed=true
+  [[ -d $dfr_dir ]] && echo "removed $dfr_name"
+  rm -rf "$dfr_dir" "$dfr_dir.new" "$pfex" "$pfex.new"
+  # The bridge's gaze file (its folders only when empty: other tools use frame-pcvr too), and GStreamer's plugin lists
+  # in the game's prefix that name the H.264 package (Proton makes them again at the next start).
+  rm -f "$HOME/.local/share/frame-pcvr/gaze/frame-gaze-v1.bin" "$apps/compatdata/$appid/fex-emu/ThunksDB.json"
+  rmdir "$HOME/.local/share/frame-pcvr/gaze" 2>/dev/null && rmdir "$HOME/.local/share/frame-pcvr" 2>/dev/null || true
+  local f
+  for f in "$apps/compatdata/$appid/gstreamer-1.0"/registry.*; do
+    [[ -f $f ]] && { [[ $f == *.frame-vrc-old ]] || grep -qF "$video_pkg" "$f"; } && rm -f "$f"
+  done
+  rm -f "$HOME/.local/bin/frame-vrc" "$HOME/.local/share/applications/frame-vrc.desktop"
+  # a panel opened from the app list (when the panel started this, it runs detached and carries on)
+  pkill -TERM -x frame-vrc-panel 2>/dev/null || true
+  if $purge; then
+    rm -rf "$work" "$data"
+    echo "removed $work and $data"
+  else
+    echo "kept $work (FEX build) and $data (settings, packages, bench reports); --purge removes them"
+  fi
+  # Steam lists compatibility tools until it restarts: chosen in Steam after this, the deleted copy fails to launch
+  if $listed; then
+    echo "restarting Steam so it no longer lists $dfr_name (SteamVR restarts with it, about a minute)"
+    steamapi restart >/dev/null 2>&1 || echo "frame-vrc: restart Steam yourself to drop $dfr_name from its list" >&2
+  fi
+  [[ $here == "$HOME/.local/lib/frame-vrc" ]] && rm -rf "$here"
+  echo "frame-vrc uninstalled"
+}
+
+usage() {
+  cat <<EOF
+frame-vrc $VERSION: Standalone PC VRChat on the Steam Frame (powered by ji10me's PCVR runtime)
+
+Usage:
+  frame-vrc setup                   Configure and switch $name to the PCVR version ("$dfr_name",
+                                    isolated FEX, render resolution 1920, launch options)
+  frame-vrc official                Revert $name to the official Android version (Lepton) and
+                                    restore previous launch options and resolution
+  frame-vrc panel                   Open the SteamVR dashboard panel
+  frame-vrc next [--json]           Show the next recommended setup action
+  frame-vrc status [--json]         Show current version and component status
+  frame-vrc resolution 1056|1440|1920
+                                    Set per-eye render resolution (Performance / Balanced / Quality)
+  frame-vrc launch                  Launch $name
+  frame-vrc doctor [--json]         Run environment health checks and diagnostics
+  frame-vrc update [VERSION|--rc]   Update frame-vrc and runtime packages
+  frame-vrc uninstall [--purge]     Revert to the official build and uninstall frame-vrc
+                                    (--purge also removes downloaded packages and state files)
+
+Advanced:
+  frame-vrc resolution 1600|2160|N  Set custom per-eye render resolution (360-4096)
+  frame-vrc video check             Check if H.264 hardware decoding is active during video playback
+  frame-vrc dfrtest [on|off]        Toggle DFR debug overlay (gaze indicator and DXVK DFR log)
+  frame-vrc install-deps            Prompt Steam to install FEX-Emu, Proton Experimental, and EAC Runtime
+  frame-vrc store                   Open VRChat's Steam store page
+  frame-vrc swap [8g|1g]            Show swap status or print root commands to configure 8 GB / 1 GB swap
+  frame-vrc build [--jobs N] | fetch URL|FILE | pack
+                                    Build, fetch, or package the patched FEX binary archive
+  frame-vrc setup [FEX] --dfr X --video X --mf X
+                                    Run setup using custom package URLs or local archives
+  frame-vrc launch-options show|set|clear
+  frame-vrc bench                   Record a session performance report (CPU, memory, temperature, FPS)
+EOF
+}
+
+[[ $(id -u) != 0 ]] || die "do not run as root"
+cmd=${1:-help}
+shift || true
+case $cmd in
+  setup | community) cmd_setup "$@" ;;
+  official) cmd_official ;;
+  status) cmd_status "$@" ;;
+  resolution) cmd_resolution "$@" ;;
+  dfrtest) cmd_dfrtest "$@" ;;
+  video) [[ ${1:-} == check ]] || die "usage: frame-vrc video check (H.264 hardware video is always on in 0.8)"; video_check ;;
+  apply) cmd_apply "$@" ;;
+  launch) cmd_launch ;;
+  doctor) cmd_doctor "$@" ;;
+  update) cmd_update "$@" ;;
+  packages) cmd_packages ;;
+  next) cmd_next "$@" ;;
+  store) steam_url "steam://store/$appid"; echo "Steam shows $name's store page: add it to the library, then: frame-vrc next" ;;
+  swap) cmd_swap "$@" ;;
+  panel) cmd_panel "$@" ;;
+  install-deps) cmd_install_deps "$@" ;;
+  build) cmd_build "$@" ;;
+  fetch) cmd_fetch "$@"; pin "$work/stage" "$1" ;;
+  pack) cmd_pack ;;
+  launch-options) cmd_launch_options "$@" ;;
+  bench) cmd_bench ;;
+  uninstall) cmd_uninstall "$@" ;;
+  version) echo "$VERSION" ;;
+  help | -h | --help) usage ;;
+  fex | proton | mode | switch) die "'$cmd' is gone in 0.8: frame-vrc setup (the PCVR version) or frame-vrc official" ;;
+  dfr | tune) die "'$cmd' is gone: frame-vrc uses ji10me's tested runtime settings as they are" ;;
+  *) usage; exit 1 ;;
+esac

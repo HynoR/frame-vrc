@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=frame-vrc
+Comment=Set up and tune PC VRChat on the Steam Frame from the SteamVR dashboard: environment check, resolution, foveated rendering, launch.
+# The installer puts in the absolute paths of the binary and icon (Steam may start it without ~/.local/lib in PATH,
+# and reads the icon theme only when it starts)
+Exec=@BINARY@ --show
+Icon=@ICON@
+Terminal=false
+Categories=Game;Utility;

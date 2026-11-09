@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# frame-vrc 0.7's launch options call this (env ... dfr-run %command%); frame-vrc 0.8 rewrites them to frame-vrc-run
+# (frame-vrc setup, or the update's packages step). Until then the game starts the same way.
+exec "$(dirname "$(readlink -f "$0")")/frame-vrc-run" "$@"

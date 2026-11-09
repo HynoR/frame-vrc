@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# VRChat's launch options are "frame-vrc-run %command%": Steam runs this first, natively, with the whole launch command
+# (steam-launch-wrapper ... FEX-Emu/fex-compat-tool ... <compatibility tool> ... VRChat). When that command runs
+# frame-vrc's Proton copy, it hands Steam's FEX layer frame-vrc's runtime (ji10me's tested setup: the patched FEX,
+# Vulkan thunks, DFR, DXVK and video settings live in its emulator.json), starts ji10me's session supervisor (thread
+# layout, eye-tracking bridge) and becomes the game (exec: Steam tracks it as before). With any other tool (Lepton, the
+# official Android build; another Proton) it runs the command exactly as Steam gave it.
+data=$HOME/.local/share/frame-vrc
+ours=0
+for a; do [[ $a == */compatibilitytools.d/frame-vrc-dfr/proton ]] && ours=1; done
+((ours)) || exec "$@"
+# frame-vrc's Proton without frame-vrc's FEX: EAC will fail; say why in Steam's log, run as asked
+[[ -x $data/fex/fex-compat-tool ]] || { echo "frame-vrc-run: no patched FEX in $data/fex: run frame-vrc setup" >&2; exec "$@"; }
+
+# Steam's FEX-Emu stays as Valve ships it; only this launch uses the private copy.
+args=()
+for a; do [[ $a == */steamapps/common/FEX-Emu/fex-compat-tool ]] && a=$data/fex/fex-compat-tool; args+=("$a"); done
+set -- "${args[@]}"
+
+# As ji10me's launch.py: FEX's config and data in the game's prefix, its own FEXServer (not one Steam's FEX-Emu
+# started), EAC's launcher folder, the tool path list naming our FEX instead of Steam's.
+prefix=${STEAM_COMPAT_DATA_PATH:-}
+if [[ -n $prefix ]]; then
+  mkdir -p "$prefix/fex-emu" "$prefix/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat"
+  [[ ! -f $data/fex-config/ThunksDB.json ]] || cp "$data/fex-config/ThunksDB.json" "$prefix/fex-emu/"
+  export FEX_APP_CONFIG_LOCATION=$prefix/fex-emu/ FEX_APP_DATA_LOCATION=$prefix/ \
+    EAC_LAUNCHERDIR=$prefix/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat
+fi
+export FEX_SERVERSOCKETPATH=frame-vrc-vrchat
+paths=() IFS=:
+for p in ${STEAM_COMPAT_TOOL_PATHS:-}; do [[ $p == */steamapps/common/FEX-Emu ]] && p=$data/fex; paths+=("$p"); done
+STEAM_COMPAT_TOOL_PATHS="${paths[*]}"
+unset IFS
+export STEAM_COMPAT_TOOL_PATHS
+# Steam's EAC runtime (in whichever Steam library it is)
+eac=$(sed -n 's/^EAC_RUNTIME=//p' "$data/config" 2>/dev/null | tail -1)
+export PROTON_EAC_RUNTIME="${eac:-$HOME/.local/share/Steam/steamapps/common/Proton EasyAntiCheat Runtime}"
+
+# ji10me's session supervisor: VRChat's tested thread layout, then the eye-tracking bridge once VR is ready; it ends
+# with the game. Own session: Steam does not wait for it.
+if [[ -n $prefix && -x $data/runtime/gaze-bridge ]]; then
+  mkdir -p "$HOME/.local/share/frame-pcvr"  # the bridge makes its private gaze/ folder only inside an existing parent
+  printf '{"prefix": "%s"}\n' "$prefix" >"$data/runtime/runtime.json"
+  # Steam's library path would load its old libopenvr_api.so before SteamVR's, and its overlay is meant for the game
+  env -u LD_PRELOAD -u LD_LIBRARY_PATH VR_PATHREG_OVERRIDE="$HOME/.config/openvr/openvrpaths.vrpath" \
+    setsid python3 -B "$data/runtime/session.py" </dev/null >"$data/runtime/session.log" 2>&1 &
+fi
+exec "$@"

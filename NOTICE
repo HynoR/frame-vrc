@@ -1,0 +1,45 @@
+frame-vrc
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Not affiliated with Valve, Epic Games, VRChat, FEX-Emu, or FX GAMES.
+
+Third-Party Notices:
+
+- lib/build-fex.sh
+  Unmodified copy of fex-eac/build-fex.sh from steamac (FX Steam Launcher,
+  https://github.com/StonkGuy/steamac).
+  Copyright 2026 FX GAMES FZ LLC. Licensed under Apache-2.0.
+
+- FEX (https://github.com/StonkGuy/FEX)
+  frame-vrc downloads or builds FEX from StonkGuy/FEX. Prebuilt FEX release
+  packages (fex-*-steamframe-aarch64.tar.gz) include FEX's MIT license as
+  LICENSE.FEX. Bundled component licenses are located in licenses/FEX/.
+  Easy Anti-Cheat is provided by Valve's Proton EasyAntiCheat Runtime via Steam.
+
+- src/frame-vrc-panel
+  Licensed under MIT (src/frame-vrc-panel/LICENSE), adapted from FrameClash's
+  panel.
+  - src/third_party_frameeyeosc/: Unmodified copy from frameeyeosc
+    (https://github.com/sasaken1102r/frameeyeosc), licensed under MIT
+    (LICENSE.frameeyeosc).
+  - third_party/openvr/openvr.h: OpenVR SDK header, licensed under BSD-3-Clause
+    (LICENSE). Links against SteamVR's libopenvr_api.so at runtime.
+
+- lib/ji10me/
+  VRChat runtime components from SteamFrame_Standalone_PCVR_VRChat 0.3.6
+  (https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat).
+  Copyright (c) 2026 JITOME (ji10me). Licensed under MIT (lib/ji10me/LICENSE).
+  Includes session.py, gaze bridge, openvr-stats, and Vulkan lookup adapter
+  sources. openvr.h is licensed under BSD-3-Clause (lib/ji10me/LICENSE.openvr).
+  lib/fex-runtime.py applies the runtime settings from installer/frame_setup.py
+  to frame-vrc's private FEX environment.
+
+- Release Asset Packages (from SteamFrame_Standalone_PCVR_VRChat 0.3.6):
+  - dfr-dxvk-*-steamframe.tar.gz: ji10me's DXVK d3d11.dll and dxgi.dll with
+    foveated rendering (DXVK: zlib; Frame additions: see licenses/ inside the
+    archive; source attached to release as dxvk-frame-source.tar.xz).
+  - video-h264-*-steamframe.tar.gz: GStreamer V4L2 plugin (gst-plugins-good
+    1.22.0, LGPL) with JITOME's Steam Frame Iris patch (license, patch, and
+    source notes inside archive; source attached as gstreamer-frame-source.tar.xz).
+  - wine-mf-*-steamframe.tar.gz: ji10me's Wine mf.dll (LGPL-2.1; source attached
+    as wine-mf-source.tar.xz).
