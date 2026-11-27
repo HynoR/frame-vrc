@@ -93,6 +93,7 @@ private:
     void drawSidebar(const Pen& pen, const Snapshot& s);
     void drawHome(const Pen& pen, const Snapshot& s);
     void drawInstall(const Pen& pen, const Snapshot& s);
+    void drawSetupWizard(const Pen& pen, const Snapshot& s);
     void drawEnvironment(const Pen& pen, const Snapshot& s);
     void drawAdvanced(const Pen& pen, const Snapshot& s);
     void drawFooter(const Pen& pen, const Snapshot& s);

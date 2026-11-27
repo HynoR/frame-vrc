@@ -33,13 +33,14 @@ Open the **Install** page in the panel:
 
 ![Install page: Setup to PCVR Version](images/panel-install-setup.jpg)
 
-1. Tap **Setup to PCVR Version** (green), then tap again to confirm.
-2. On first run, **Steam will restart once** to register the new compatibility tool (the dashboard will disappear for about a minute before resuming setup automatically). You can monitor progress on the **Log** page.
-3. If VRChat is not yet installed, confirm Steam's installation prompt when it appears.
+1. Tap **Setup to PCVR Version** (green), then tap again to confirm. The **Install** page switches to the 8-step setup wizard (you can tap **View log** anytime to inspect raw output).
+2. Missing Steam tools (FEX-Emu, Proton Experimental, Proton EasyAntiCheat Runtime) are requested **one at a time**. Confirm each Steam install prompt as it appears; if you closed a prompt by mistake, tap **Reopen Install Prompt**. The wizard waits automatically while Steam downloads.
+3. At step 7, **Steam restarts once** if needed to register the new compatibility tool (the dashboard view will briefly disappear and resume automatically when you reopen the panel).
+4. If a step fails or stops early, tap **Retry This Step** (or re-run `frame-vrc setup`) to continue from that step.
 
 ![Log page while setup runs](images/panel-log.jpg)
 
-Once finished, the panel status will show **patched: update and launch VRChat**.
+Once finished, if VRChat itself still needs to download or update to the PC build, the wizard shows that VRChat still needs install/update in Steam (or **patched: update and launch VRChat**).
 
 ## 3. Launch VRChat
 

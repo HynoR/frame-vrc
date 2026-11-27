@@ -53,6 +53,41 @@ int num(const JsonValue& o, const char* key) {
     return v != nullptr && v->isNumber() ? static_cast<int>(v->number) : 0;
 }
 
+bool flag(const JsonValue& o, const char* key) {
+    const JsonValue* v = o.get(key);
+    return v != nullptr && v->isBool() && v->boolean;
+}
+
+/** Read setup-status --json; tolerates old CLIs that fail or lack the command (returns inactive). */
+SetupProgress fetchSetupStatus(const std::string& cli) {
+    SetupProgress p;
+    std::string out, ignored;
+    if (capture({cli, "setup-status", "--json"}, out, kQueryTimeoutMs) != 0) return p;
+    JsonValue v;
+    if (!parseJson(out, v, ignored) || !v.isObject()) return p;
+    p.active = flag(v, "active");
+    if (!p.active) return p;
+    p.op = str(v, "op");
+    p.state = str(v, "state");
+    p.step = num(v, "step");
+    p.total = num(v, "total");
+    p.title = str(v, "title");
+    p.sub = str(v, "sub");
+    p.reason = str(v, "reason");
+    p.appId = str(v, "app_id");
+    p.download = flag(v, "download");
+    p.gamePending = flag(v, "game_pending");
+    p.alive = flag(v, "alive");
+    if (const JsonValue* a = v.get("actions"); a != nullptr && a->isArray())
+        for (const JsonValue& item : a->items)
+            if (item.isString()) p.actions.push_back(item.text);
+    if (const JsonValue* r = v.get("results"); r != nullptr && r->isArray())
+        for (const JsonValue& item : r->items)
+            if (item.isObject())
+                p.results.push_back({num(item, "step"), str(item, "title"), str(item, "state"), str(item, "note")});
+    return p;
+}
+
 /** The last line worth showing: curl's progress bar rewrites its line with \r, so the text after the last \r. */
 std::string lastLine(const std::string& log, int* exitCode) {
     std::string last;
@@ -153,6 +188,14 @@ void Model::run(const std::vector<std::string>& args) {
     wake_.notify_all();
 }
 
+void Model::reopen() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        reopenPending_ = true;
+    }
+    wake_.notify_all();
+}
+
 void Model::stage(const std::string& key, const std::string& value) {
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -186,12 +229,27 @@ void Model::setInterval(int ms) {
 
 bool Model::idle() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return pendingRun_.empty() && staged_.empty() && !refreshNow_ && !snap_.refreshing && !snap_.running;
+    return pendingRun_.empty() && staged_.empty() && !refreshNow_ && !reopenPending_ && !snap_.refreshing &&
+           !snap_.running;
 }
 
 void Model::loop() {
     std::unique_lock<std::mutex> lock(mutex_);
     while (!quit_) {
+        if (reopenPending_) {
+            reopenPending_ = false;
+            lock.unlock();
+            std::string ignored;
+            capture({cli_, "setup-reopen"}, ignored, kQueryTimeoutMs);
+            SetupProgress sp = fetchSetupStatus(cli_);
+            lock.lock();
+            if (sp != snap_.setup) {
+                snap_.setup = std::move(sp);
+                changed();
+            }
+            nextSetupPoll_ = nowMs() + 1000;
+            continue;
+        }
         if (!pendingRun_.empty()) {
             const std::vector<std::string> args = std::move(pendingRun_);
             pendingRun_.clear();
@@ -230,9 +288,22 @@ void Model::loop() {
             snap_.refreshing = false;
             changed();
             nextRefresh_ = nowMs() + intervalMs_;
+            nextSetupPoll_ = nowMs() + 1000;
             continue;
         }
-        const int64_t next = staged_.empty() ? nextRefresh_ : std::min(nextRefresh_, applyAt_);
+        if (snap_.setup.active && snap_.setup.alive && nowMs() >= nextSetupPoll_) {
+            lock.unlock();
+            SetupProgress sp = fetchSetupStatus(cli_);
+            lock.lock();
+            if (sp != snap_.setup) {
+                snap_.setup = std::move(sp);
+                changed();
+            }
+            nextSetupPoll_ = nowMs() + 1000;
+            continue;
+        }
+        int64_t next = staged_.empty() ? nextRefresh_ : std::min(nextRefresh_, applyAt_);
+        if (snap_.setup.active && snap_.setup.alive) next = std::min(next, nextSetupPoll_);
         wake_.wait_for(lock, std::chrono::milliseconds(std::max<int64_t>(50, next - nowMs())));
     }
 }
@@ -284,8 +355,10 @@ void Model::doRefresh() {
         for (const JsonValue& r : v.items)
             if (r.isObject()) checks.push_back({str(r, "group"), str(r, "level"), str(r, "text"), str(r, "fix")});
     }
+    SetupProgress sp = fetchSetupStatus(cli_);
     std::lock_guard<std::mutex> lock(mutex_);
     snap_.status = st;
+    snap_.setup = std::move(sp);
     snap_.error = error;
     if (checked) {
         snap_.checks = std::move(checks);
@@ -339,12 +412,26 @@ void Model::pollRun() {
         since = snap_.runSinceMs;
     }
     const bool alive = pid > 0 ? ::kill(pid, 0) == 0 : nowMs() - since < kStartGraceMs;
+    bool pollSetup = false;
+    SetupProgress sp;
+    if (exitCode < 0 && alive) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        pollSetup = nowMs() >= nextSetupPoll_;
+    }
+    if (pollSetup) {
+        sp = fetchSetupStatus(cli_);
+        nextSetupPoll_ = nowMs() + 1000;
+    }
     std::lock_guard<std::mutex> lock(mutex_);
     if (lines != snap_.runLog) {
         snap_.runLog = std::move(lines);
         changed();
     }
     if (exitCode < 0 && alive) {
+        if (pollSetup && sp != snap_.setup) {
+            snap_.setup = std::move(sp);
+            changed();
+        }
         if (line != snap_.runLine) {
             snap_.runLine = line;
             changed();

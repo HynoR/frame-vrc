@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "op": "setup",
+  "state": "waiting_steam",
+  "step": 7,
+  "total": 8,
+  "title": "Let Steam see Proton",
+  "sub": "restarting Steam",
+  "reason": "Waiting for Steam to list Proton Experimental (Ji10me PCVR Edit)",
+  "app_id": "",
+  "download": false,
+  "actions": ["log"],
+  "game_pending": false,
+  "alive": true,
+  "results": [
+    {"step": 1, "title": "Check Steam and VRChat", "state": "done", "note": ""},
+    {"step": 2, "title": "Install FEX-Emu", "state": "done", "note": ""},
+    {"step": 3, "title": "Install Proton Experimental", "state": "done", "note": ""},
+    {"step": 4, "title": "Install Proton EasyAntiCheat Runtime", "state": "done", "note": ""},
+    {"step": 5, "title": "Get and verify packages", "state": "done", "note": ""},
+    {"step": 6, "title": "Deploy the PCVR runtime", "state": "done", "note": ""},
+    {"step": 7, "title": "Let Steam see Proton", "state": "running", "note": "Steam restarting"},
+    {"step": 8, "title": "Apply and verify VRChat settings", "state": "pending", "note": ""}
+  ]
+}

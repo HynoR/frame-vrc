@@ -4,19 +4,25 @@
 # and actions that just print a few lines.
 d=$(dirname "$0")
 case "$1 ${2:-}" in
-  "status --json") cat "$d/status-${FAKE:-ready}.json" ;;
+  "status --json") cat "$d/status-${FAKE:-ready}.json" 2>/dev/null || cat "$d/status-fresh.json" ;;
   "doctor --json") cat "$d/doctor-${FAKE:-ready}.json" 2>/dev/null || cat "$d/doctor-fresh.json"; [ "${FAKE:-ready}" = ready ] ;;
+  "setup-status --json") cat "$d/setup-${FAKE:-ready}.json" 2>/dev/null || echo '{"active":false}' ;;
+  "setup-reopen "*) echo "reopened" ;;
   "setup "*)
-    echo "==> [1/6] Checking Steam"; echo "ok: FEX-Emu"; echo "ok: Proton - Experimental"; echo "ok: Proton EasyAntiCheat Runtime"
-    echo "==> [2/6] Downloading frame-vrc's packages (patched FEX, DFR DXVK, H.264 plugin)"
+    echo "==> [1/8] Check Steam and VRChat"; echo "ok: Steam running, VRChat in library"
+    echo "==> [2/8] Install FEX-Emu"; echo "ok: FEX-Emu"
+    echo "==> [3/8] Install Proton Experimental"; echo "ok: Proton - Experimental"
+    echo "==> [4/8] Install Proton EasyAntiCheat Runtime"; echo "ok: Proton EasyAntiCheat Runtime"
+    echo "==> [5/8] Get and verify packages"
     echo "downloading fex-eac-2610.3-45-g6effd23-steamframe-aarch64.tar.gz"
     printf '##########              14.2%%\r##########################     72.9%%\r############################ 100.0%%\n'
     echo "fex-eac-2610.3-45-g6effd23-steamframe-aarch64.tar.gz: OK"
-    echo "==> [3/6] ji10me's runtime with the patched FEX, for VRChat only"
+    echo "==> [6/8] Deploy the PCVR runtime"
     echo "ji10me's session supervisor and eye-tracking bridge built"
     echo "patched FEX for VRChat: eac-2610.3-45-g6effd23, ji10me-0.3.6 runtime, Vulkan thunks on"
-    echo "==> [4/6] Proton Experimental (Ji10me PCVR Edit)"
     printf 'copying Proton Experimental experimental-11.0-20261027b-x86_64 to ~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr (~1.5 GB) ...'
-    sleep "${FAKE_SLOW:-1}"; echo ;;
+    sleep "${FAKE_SLOW:-1}"; echo
+    echo "==> [7/8] Let Steam see Proton"; echo "ok: frame-vrc-dfr listed"
+    echo "==> [8/8] Apply and verify VRChat settings"; echo "ok: VRChat configured" ;;
   *) echo "frame-vrc $*"; sleep 1; echo "copying Proton Experimental 11.0-20261027b to ~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr (~1.5 GB) ..."; sleep "${FAKE_SLOW:-1}"; echo "done: $*" ;;
 esac

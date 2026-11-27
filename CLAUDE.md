@@ -5,8 +5,10 @@ frame-vrc lets the Steam Frame (SteamOS VR, aarch64, 16 GB) run the PC build of 
 ([SteamFrame_Standalone_PCVR_VRChat](https://github.com/ji10me/SteamFrame_Standalone_PCVR_VRChat)) from the headset
 alone, switches VRChat between the official Android version (Lepton) and the PCVR version, and puts everything back.
 
-- **The runtime is ji10me's and is authoritative.** He tested it with the community; do not tune it (no DFR levels,
-  CPU/VRAM/thread knobs, extra env vars). Our work is isolation, install, switching and the panel.
+- **The runtime is ji10me's and is the baseline.** He tested it with the community; it is the most stable setup known
+  today, not the final one. Do not tune it in 0.8.x (no DFR levels, CPU/VRAM/thread/FEX knobs, extra env vars). A later
+  change needs A/B data from the Frame against his values (our notes: `tmp/research/`; his: his repo's `tools/`,
+  `portable/`, `docs/`). Our work is isolation, install, switching and the panel.
 - Users install only ji10me's versions. Syncing a new ji10me release is done by hand (his release format is not fixed
   yet); see "Syncing ji10me" below. Third-party builds are installed by the user with `setup --dfr/--video/--mf FILE`.
 

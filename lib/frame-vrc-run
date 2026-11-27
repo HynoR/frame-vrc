@@ -27,6 +27,9 @@ if [[ -n $prefix ]]; then
     EAC_LAUNCHERDIR=$prefix/pfx/drive_c/users/steamuser/AppData/Roaming/EasyAntiCheat
 fi
 export FEX_SERVERSOCKETPATH=frame-vrc-vrchat
+# ji10me 0.3.7: VRChat's Unity 6 GC can stop with "SuspendThread loop failed" under FEX with Proton 11 fsync/ntsync,
+# behind a dialog the headset never shows (VRChat freezes at login or joining a world); wineserver sync passed his tests.
+export PROTON_NO_FSYNC=1 PROTON_NO_ESYNC=1 PROTON_NO_NTSYNC=1
 paths=() IFS=:
 for p in ${STEAM_COMPAT_TOOL_PATHS:-}; do [[ $p == */steamapps/common/FEX-Emu ]] && p=$data/fex; paths+=("$p"); done
 STEAM_COMPAT_TOOL_PATHS="${paths[*]}"

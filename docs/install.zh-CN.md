@@ -27,18 +27,22 @@ tar xzf frame-vrc-<version>.tar.gz && frame-vrc-<version>/install.sh
 
 ## `setup` 执行流程
 
-执行 `frame-vrc setup`（或在面板中点击 **Setup to PCVR Version**）会依次完成以下操作：
+执行 `frame-vrc setup`（或在面板中点击 **Setup to PCVR Version**）会运行 8 步引导向导。若中途中断或出错，再次运行 `frame-vrc setup`（或在面板点击 **Retry This Step**）会从首个未完成步骤继续：
 
-1. **检查 Steam 依赖**：检查 FEX-Emu、Proton Experimental 与 Proton EasyAntiCheat Runtime，缺失时自动调起 Steam 安装提示。
-2. **下载与校验组件**：从 GitHub Releases 下载补丁版 FEX、DFR DXVK、H.264 视频插件及 Wine 音频修复包，并逐一校验 SHA-256。
-3. **部署私有 FEX 环境**：在 `~/.local/share/frame-vrc/fex` 下配置仅对 VRChat 生效的 ji10me 运行方案，并编译会话管理器与眼动追踪桥接程序。
-4. **创建独立 Proton 工具**：在 `~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr`（约 1.5 GB）创建集成 DFR DXVK 的 `Proton Experimental (Ji10me PCVR Edit)`；首次创建会自动重启一次 Steam 以刷新工具列表。
-5. **配置 VRChat 启动项**：将 VRChat 的兼容工具设为该 Proton 副本，默认单眼渲染分辨率设为 `1920`，启动参数设为 `frame-vrc-run %command%`。
+1. **检查 Steam 与 VRChat**：确认 Steam 响应正常且 VRChat 已加入库（未入库时提示前往商店，游戏运行中时提示退出）。
+2. **安装 FEX-Emu**：检查 FEX-Emu（`3127680`），缺失时调起 Steam 安装提示并等待确认与安装完成。
+3. **安装 Proton Experimental**：待上一项就绪后，按顺序调起 Proton Experimental（`1493710`）的 Steam 安装提示并等待完成。
+4. **安装 Proton EasyAntiCheat Runtime**：以同样的逐项确认方式安装 Proton EasyAntiCheat Runtime（`1826330`）。
+5. **获取与校验组件**：下载（或使用自定义本地文件）补丁版 FEX、DFR DXVK、H.264 视频插件及 Wine 音频修复包，并逐一校验 SHA-256。
+6. **部署 PCVR 运行环境**：编译 ji10me 会话管理器与眼动追踪桥接程序，在 `~/.local/share/frame-vrc/fex` 部署仅对 VRChat 生效的私有 FEX 环境，并在 `~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr` 创建 `Proton Experimental (Ji10me PCVR Edit)`（约 1.5 GB）。
+7. **让 Steam 识别 Proton**：检查 Steam 是否已列出该 Proton 副本；尚未识别时会自动重启一次 Steam（面板界面会短暂消失），重启后复查结果。
+8. **应用并验证 VRChat 设置**：配置兼容工具、默认单眼渲染分辨率（`1920`）与启动参数（`frame-vrc-run %command%`），并在 VRChat 本体仍待下载或更新时单独提示。
 
 ## 命令参考
 
 ```text
-frame-vrc setup                  配置并切换至 PCVR 版
+frame-vrc setup                  配置并切换至 PCVR 版（未完成时可续接）
+frame-vrc install-deps           仅安装 Steam 依赖（第 1–4 步）
 frame-vrc official               恢复至官方安卓版
 frame-vrc status                 查看当前版本与组件状态
 frame-vrc doctor                 检查运行环境并给出修复建议（正常时输出 all set）

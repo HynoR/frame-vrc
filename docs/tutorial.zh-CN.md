@@ -33,13 +33,14 @@ curl -fsSL https://raw.githubusercontent.com/HynoR/frame-vrc/main/get.sh | bash
 
 ![Install 页：Setup to PCVR Version](images/panel-install-setup.jpg)
 
-1. 点击 **Setup to PCVR Version**（绿色按钮），再次点击确认。
-2. 首次配置会**自动重启一次 Steam** 以加载新增的兼容工具（界面会短暂消失约 1 分钟，随后自动继续配置）。可在 **Log** 页面查看实时进度。
-3. 若尚未安装 VRChat，过程中会弹出 Steam 安装提示，确认即可。
+1. 点击 **Setup to PCVR Version**（绿色按钮），再次点击确认。**Install** 页面会进入 8 步配置向导（可随时点击 **View log** 查看原始输出）。
+2. 缺失的 Steam 工具（FEX-Emu、Proton Experimental、Proton EasyAntiCheat Runtime）会**逐个**弹出安装确认；若不小心关掉弹窗，点击 **Reopen Install Prompt** 可重新打开当前项。Steam 下载期间向导会自动等待。
+3. 到第 7 步时，如需让 Steam 识别新的兼容工具，会**自动重启一次 Steam**（界面会短暂消失，重新打开面板后自动恢复当前进度）。
+4. 若某一步失败或中途停止，点击 **Retry This Step**（或重新运行 `frame-vrc setup`）即可从该步继续。
 
 ![设置过程中的 Log 页](images/panel-log.jpg)
 
-配置完成后，面板状态将显示为 **patched: update and launch VRChat**。
+配置完成后，若 VRChat 本体仍需在 Steam 中下载或更新为 PC 版，向导会提示需在 Steam 中安装或更新 VRChat（或显示 **patched: update and launch VRChat**）。
 
 ## 3. 启动 VRChat
 

@@ -33,9 +33,39 @@ struct Check {
     std::string group, level, text, fix;
 };
 
+/** One step row from frame-vrc setup-status --json. */
+struct SetupStepResult {
+    int step = 0;
+    std::string title, state, note;
+
+    bool operator==(const SetupStepResult& o) const {
+        return step == o.step && title == o.title && state == o.state && note == o.note;
+    }
+    bool operator!=(const SetupStepResult& o) const { return !(*this == o); }
+};
+
+/** frame-vrc setup-status --json */
+struct SetupProgress {
+    bool active = false;
+    std::string op, state, title, sub, reason, appId;
+    int step = 0, total = 0;
+    bool download = false, gamePending = false, alive = false;
+    std::vector<std::string> actions;
+    std::vector<SetupStepResult> results;
+
+    bool operator==(const SetupProgress& o) const {
+        return active == o.active && op == o.op && state == o.state && title == o.title && sub == o.sub &&
+               reason == o.reason && appId == o.appId && step == o.step && total == o.total &&
+               download == o.download && gamePending == o.gamePending && alive == o.alive && actions == o.actions &&
+               results == o.results;
+    }
+    bool operator!=(const SetupProgress& o) const { return !(*this == o); }
+};
+
 struct Snapshot {
     uint64_t seq = 0;              ///< bumps on every change (the UI redraws when it moves)
     Status status;
+    SetupProgress setup;
     std::string error;             ///< why the CLI could not be asked
     std::vector<Check> checks;
     bool checked = false;          ///< doctor answered at least once
@@ -66,6 +96,8 @@ public:
     void refresh();
     /** Start frame-vrc ARGS (ignored while an action runs). */
     void run(const std::vector<std::string>& args);
+    /** Ask a waiting setup task to reopen its current Steam install prompt (runs even while an action runs). */
+    void reopen();
     /** A setting tap: sent with the others as one "frame-vrc apply" once no tap came for kApplyDelayMs. */
     void stage(const std::string& key, const std::string& value);
     /** Run doctor on every refresh (the Environment page), else only at start and after actions. */
@@ -86,9 +118,11 @@ private:
     bool fullChecks_ = false;
     bool checksDue_ = true;
     bool refreshNow_ = true;
+    bool reopenPending_ = false;
     bool quit_ = false;
     int intervalMs_ = 10000;
     int64_t nextRefresh_ = 0;
+    int64_t nextSetupPoll_ = 0;
     Snapshot snap_;
     std::thread thread_;
 

@@ -8,7 +8,7 @@
 # Experimental (Ji10me PCVR Edit)", the PC build. Which build is on disk is Steam's business: frame-vrc never moves game
 # files or starts downloads. Everything frame-vrc adds is for VRChat only; Steam's FEX-Emu and other games are untouched.
 set -euo pipefail
-VERSION=0.8.0
+VERSION=0.8.1-rc1
 repo=HynoR/frame-vrc
 here=$(cd "$(dirname "$(readlink -f "$0")")" && pwd)
 lib=$here/lib
@@ -24,12 +24,79 @@ lib_of() {
   while read -r l; do [[ -f $l/steamapps/appmanifest_$1.acf ]] && { echo "$l/steamapps"; return; }; done < <(libs)
   echo "$steam/steamapps"
 }
-apps=$(lib_of 438100)  # VRChat's library: its files, its prefix (compatdata), its downloads
-fex=$(lib_of 3127680)/common/FEX-Emu
-proton_exp="$(lib_of 1493710)/common/Proton - Experimental"
-eac_rt="$(lib_of 1826330)/common/Proton EasyAntiCheat Runtime"
+appid=438100 name=VRChat
+# Steam runtime dependencies in install order (SteamVR shows one install dialog at a time):
+# step | appid | Steam common folder name | display label
+DEPS=(
+  "2|3127680|FEX-Emu|FEX-Emu"
+  "3|1493710|Proton - Experimental|Proton Experimental"
+  "4|1826330|Proton EasyAntiCheat Runtime|Proton EasyAntiCheat Runtime"
+)
+dep_dir() {
+  local row id dir; for row in "${DEPS[@]}"; do IFS='|' read -r _ id dir _ <<<"$row"; [[ $id == "$1" ]] && { echo "$dir"; return 0; }; done
+  return 1
+}
+dep_label() {
+  local row id lbl; for row in "${DEPS[@]}"; do IFS='|' read -r _ id _ lbl <<<"$row"; [[ $id == "$1" ]] && { echo "$lbl"; return 0; }; done
+  return 1
+}
+dep_path() { echo "$(lib_of "$1")/common/$(dep_dir "$1")"; }
+dep_state_flags() {
+  sed -n 's/^[[:space:]]*"StateFlags"[[:space:]]*"\([0-9]*\)".*/\1/p' "$(lib_of "$1")/appmanifest_$1.acf" 2>/dev/null | head -1
+}
+dep_downloading() {
+  local l; l=$(lib_of "$1")
+  [[ -d $l/downloading/$1 ]] && return 0
+  local f; f=$(dep_state_flags "$1")
+  [[ -n $f ]] && ((f & 1024))
+}
+dep_files_ok() {
+  local id=$1 dir=${2:-$(dep_path "$1")}
+  case $id in
+    # Files read/copied by pfex_install and fex-runtime.py
+    3127680) [[ -f $dir/fex-compat-tool && -f $dir/VERSIONS.txt && -f $dir/emulator.json ]] ;;
+    # Files read/moved by dfr_copy, dfr_state and mf_want
+    1493710) [[ -f $dir/proton && -f $dir/version && -f $dir/files/lib/wine/dxvk/x86_64-windows/d3d11.dll && -f $dir/files/lib/wine/dxvk/x86_64-windows/dxgi.dll && -f $dir/files/lib/wine/x86_64-windows/mf.dll ]] ;;
+    # PROTON_EAC_RUNTIME is passed as a directory to Proton; require a non-empty folder so a stub dir does not pass
+    1826330) [[ -d $dir && -n $(find "$dir" -type f -print -quit 2>/dev/null) ]] ;;
+    *) return 1 ;;
+  esac
+}
+dep_ready() {
+  refresh_paths
+  local dir; dir=$(dep_path "$1")
+  tool_ready "$1" && dep_files_ok "$1" "$dir"
+}
+deps_all_ready() {
+  local row id
+  for row in "${DEPS[@]}"; do
+    id=${row#*|} id=${id%%|*}
+    dep_ready "$id" || return 1
+  done
+}
+# The files are there, whatever Steam is doing with them: a set-up VRChat runs from its own copies while Steam updates
+# Proton Experimental or FEX-Emu, so status and doctor do not send the user back to install-deps for that.
+deps_all_present() {
+  local row id
+  refresh_paths
+  for row in "${DEPS[@]}"; do
+    id=${row#*|} id=${id%%|*}
+    dep_files_ok "$id" || return 1
+  done
+}
+# Re-resolve Steam library paths so tools installed to another library (e.g. SD card) are found immediately.
+refresh_paths() {
+  apps=$(lib_of "$appid")
+  gamedir=$apps/common/$name
+  acf=$apps/appmanifest_$appid.acf
+  gamelog="$apps/compatdata/$appid/pfx/drive_c/users/steamuser/AppData/LocalLow/VRChat/VRChat"
+  fex=$(dep_path 3127680)
+  proton_exp=$(dep_path 1493710)
+  eac_rt=$(dep_path 1826330)
+}
 data=$HOME/.local/share/frame-vrc
 config=$data/config
+refresh_paths
 # The patched FEX for VRChat only: Steam's FEX-Emu copied, with the patched binaries from the stage. lib/frame-vrc-run
 # hands it to Steam's FEX layer in place of Steam's FEX-Emu.
 pfex=$data/fex
@@ -53,19 +120,39 @@ dfr_files="d3d11.dll dxgi.dll"
 # from a video-h264 package; lib/frame-vrc-run puts it in front of Proton's GStreamer.
 video_pkg=$data/video
 video_files=libgstvideo4linux2.so
-# ji10me's audio fix: Wine's mf.dll restarting its audio client when playback resumes (wine-mf package, LGPL), built for
-# the Proton Experimental whose own mf.dll has this hash; used only on that one.
+# ji10me's audio fix: Wine's mf.dll restarting its audio client when playback resumes (wine-mf package, LGPL), used only
+# on the Proton Experimental builds he tested it on, known by their own mf.dll (his compatibility.json): 26306234 (0.3.6)
+# and 26491492 (0.3.7).
 mf_pkg=$data/mf
 mf_files=mf.dll
-mf_tested=3695700fc9373ba390c540c4825e49616bfd653036e268f9ccb6a246f40a5b92
-# The runtime is ji10me's tested setup (SteamFrame_Standalone_PCVR_VRChat 0.3.6; MIT parts in lib/ji10me): FEX and DXVK
+mf_tested="3695700fc9373ba390c540c4825e49616bfd653036e268f9ccb6a246f40a5b92
+e27eac345fb9ecb4f577490abde5b7ed2858b92dd963221564f8e72f0312e2b1"
+# The runtime is ji10me's tested setup (SteamFrame_Standalone_PCVR_VRChat 0.3.7; MIT parts in lib/ji10me): FEX and DXVK
 # settings, Vulkan thunks, DFR and video in the private FEX's emulator.json (lib/fex-runtime.py), and his session
 # supervisor with the eye-tracking bridge in $runtime. frame-vrc only installs it and switches versions.
-ji_version=ji10me-0.3.6
+ji_version=ji10me-0.3.7
 runtime=$data/runtime
 fexcfg=$data/fex-config
 
-die() { echo "frame-vrc: $*" >&2; exit 1; }
+_WIZARD_ACTIVE=0
+_WIZARD_PID=0
+_WIZARD_NOFAIL=0
+_TMP_DIRS=()
+_cleanup_tmps() {
+  local d
+  for d in "${_TMP_DIRS[@]+"${_TMP_DIRS[@]}"}"; do [[ -n $d ]] && rm -rf "$d"; done
+}
+trap '_cleanup_tmps' EXIT
+die() {
+  echo "frame-vrc: $*" >&2
+  if ((_WIZARD_ACTIVE && !_WIZARD_NOFAIL)); then
+    printf '%s' "$*" >"$data/.wizard-err.$_WIZARD_PID" 2>/dev/null || true
+    if [[ ${BASHPID:-$$} == "$_WIZARD_PID" ]]; then
+      wizard_fail "$*"
+    fi
+  fi
+  exit 1
+}
 describe() { sed -n 's/^FEX describe\t//p' "$1/VERSIONS.txt" 2>/dev/null; }
 maxtemp() { cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1; }
 
@@ -85,9 +172,6 @@ cfg_set() {
 cfg_unset() { [[ -f $config ]] && { grep -v "^$1=" "$config" >"$config.new" || true; mv "$config.new" "$config"; } || true; }
 
 # ---- the game -------------------------------------------------------------------------------------------------
-appid=438100 name=VRChat
-gamedir=$apps/common/$name acf=$apps/appmanifest_$appid.acf
-gamelog="$apps/compatdata/438100/pfx/drive_c/users/steamuser/AppData/LocalLow/VRChat/VRChat"
 # VRChat.exe, or anything Steam runs for VRChat (a launch, the Android build, its install script after an update)
 running() { pgrep -x VRChat.exe >/dev/null || pgrep -f "AppId=$appid( |$)" >/dev/null; }
 quit_first() {
@@ -98,7 +182,18 @@ quit_first() {
 
 steamapi() { python3 -I "$lib/steam-launchopts.py" "$@"; }
 # A steam:// URL through Steam's API: "steam URL &" is stopped with the panel's systemd unit before it passes it on.
-steam_url() { steamapi url "$1" >/dev/null 2>&1 || { steam "$1" >/dev/null 2>&1 & sleep 2; }; }
+steam_url() {
+  steamapi url "$1" >/dev/null 2>&1 && return 0
+  if command -v steam >/dev/null 2>&1; then
+    steam "$1" >/dev/null 2>&1 &
+    local p=$!
+    sleep 2
+    if kill -0 "$p" 2>/dev/null; then return 0; fi
+    wait "$p" && return 0
+  fi
+  echo "frame-vrc: failed to send Steam URL: $1" >&2
+  return 1
+}
 opts_get() { steamapi get "$appid"; }
 # Steam writes localconfig.vdf a moment after the API call; wait for it, then compare.
 opts_set() {
@@ -170,6 +265,7 @@ pfex_state() {
 # Steam's FEX-Emu copied (~25 MB: its scripts, rootfs and libraries; copied, not linked, so a Steam update of FEX-Emu
 # never meets binaries it was not built with) with the staged build's binaries.
 pfex_install() {
+  refresh_paths
   [[ -d $fex ]] || die "FEX-Emu not installed: frame-vrc install-deps"
   [[ -d $work/stage ]] || die "no patched FEX staged"
   [[ $(pfex_state) == ok ]] && return 0
@@ -224,6 +320,7 @@ runtime_install() {
 # running after a minute (Steam's x86 helpers right after it starts, or another game): swapping under it leaves a
 # half-old, half-new tool.
 steam_fex_restore() {
+  refresh_paths
   [[ -d $fex && $(describe "$fex") == eac-* ]] || return 0
   local b f i
   for b in "$backup"/FEX-*; do [[ -d $b ]] && break; done
@@ -316,7 +413,7 @@ get_checked() {
 # is kept as DEST.prev. pkg_fetch TOP DEST "FILES" URL|FILE
 pkg_fetch() {
   local top=$1 dest=$2 files=$3 src=$4 tmp f
-  tmp=$(mktemp -d); trap "rm -rf '$tmp'" EXIT
+  tmp=$(mktemp -d); _TMP_DIRS+=("$tmp")
   f=$(get_checked "$src" "$tmp") || exit 1  # it said why
   [[ $(tar tzf "$f" | sed 's|^\./||; s|/.*||' | sort -u) == "$top" ]] || die "unexpected archive layout (not a $top/ folder)"
   tar xzf "$f" -C "$tmp"
@@ -337,23 +434,30 @@ gst_cache_reset() {
 packages_get() {
   local url
   if [[ ! -d $work/stage ]]; then
+    wizard_sub "patched FEX"
     url=$(latest_asset 'fex-eac-.*-steamframe-aarch64\.tar\.gz') ||
       die "no FEX package in the $repo release: frame-vrc fetch URL|FILE, or frame-vrc build"
+    wizard_sub "${url##*/}"
     cmd_fetch "$url"
   elif [[ -f $work/stage/ASSET || ! -d $work/FEX ]] && url=$(newer_asset 'fex-eac-.*-steamframe-aarch64\.tar\.gz' "$work/stage"); then
+    wizard_sub "${url##*/}"
     cmd_fetch "$url"
   fi
   if url=$(newer_asset 'dfr-dxvk-.*-steamframe\.tar\.gz' "$dfr_pkg"); then
+    wizard_sub "${url##*/}"
     pkg_fetch dfr "$dfr_pkg" "$dfr_files" "$url"
   elif [[ ! -f $dfr_pkg/VERSION ]]; then
+    wizard_sub "dfr-dxvk"
     die "no DFR package in the $repo release: frame-vrc setup --dfr URL|FILE"
   fi
   if url=$(newer_asset 'video-h264-.*-steamframe\.tar\.gz' "$video_pkg"); then
+    wizard_sub "${url##*/}"
     pkg_fetch video "$video_pkg" "$video_files" "$url"; gst_cache_reset
   elif [[ ! -f $video_pkg/VERSION ]]; then
     echo "frame-vrc: no H.264 package in the release: world videos decode in software" >&2
   fi
   if url=$(newer_asset 'wine-mf-.*-steamframe\.tar\.gz' "$mf_pkg"); then
+    wizard_sub "${url##*/}"
     pkg_fetch mf "$mf_pkg" "$mf_files" "$url"
   elif [[ ! -f $mf_pkg/VERSION ]]; then
     echo "frame-vrc: no audio fix (wine-mf) package in the release" >&2
@@ -381,16 +485,18 @@ EOF
 # Steam has the app fully installed and is not updating it: StateFlags has "fully installed" (4) and nothing besides
 # "update required" (2) and "running" (64); downloading, paused, missing or corrupt files fail (as ji10me's setup checks).
 tool_ready() {
-  local f; f=$(sed -n 's/^[[:space:]]*"StateFlags"[[:space:]]*"\([0-9]*\)".*/\1/p' "$(lib_of "$1")/appmanifest_$1.acf" 2>/dev/null)
+  local f; f=$(dep_state_flags "$1")
   [[ -n $f ]] && ((f & 4)) && ! ((f & ~(4 | 2 | 64)))
 }
 # the mf.dll the copy should have: the audio fix for the Proton it was built for, else Proton's own
 mf_want() {
+  refresh_paths
   local m=files/lib/wine/x86_64-windows/mf.dll
-  if [[ -f $mf_pkg/mf.dll && $(sha "$proton_exp/$m") == "$mf_tested" ]]; then echo "$mf_pkg/mf.dll"; else echo "$proton_exp/$m"; fi
+  if [[ -f $mf_pkg/mf.dll ]] && grep -qxF "$(sha "$proton_exp/$m")" <<<"$mf_tested"; then echo "$mf_pkg/mf.dll"; else echo "$proton_exp/$m"; fi
 }
 # ok, old (Steam updated Proton Experimental, or a new DFR or audio package), missing
 dfr_state() {
+  refresh_paths
   local dx=files/lib/wine/dxvk/x86_64-windows
   if [[ ! -f $dfr_dir/proton ]]; then echo missing
   elif cmp -s "$dfr_dir/version" "$proton_exp/version" && cmp -s "$dfr_dir/$dx/d3d11.dll" "$dfr_pkg/d3d11.dll" &&
@@ -400,6 +506,7 @@ dfr_state() {
 }
 # Copied again when Steam updated Proton Experimental or the package changed; the original DLLs kept in dxvk-orig/.
 dfr_copy() {
+  refresh_paths
   local dx=files/lib/wine/dxvk/x86_64-windows
   [[ -d $proton_exp ]] || die "Proton Experimental not installed: frame-vrc install-deps"
   if [[ $(dfr_state) == ok ]]; then
@@ -454,25 +561,447 @@ reskey="steam.app.$appid.resolutionOverride"
 res_get() { { timeout 10 "$vrcmd" --settings-int "$reskey" 2>/dev/null || true; } | sed -n "s/^$reskey=//p" | tail -1; }
 
 # ---- commands: versions ---------------------------------------------------------------------------------------
-# Steam installs what is missing; each steam://install opens Steam's own install prompt for the user to confirm.
-cmd_install_deps() {
-  local missing=0 id dir
-  for pair in "3127680:FEX-Emu" "1493710:Proton - Experimental" "1826330:Proton EasyAntiCheat Runtime"; do
-    id=${pair%%:*} dir=${pair#*:}
-    [[ -d "$(lib_of "$id")/common/$dir" ]] && { echo "ok: $dir"; continue; }
-    missing=1
-    echo "asking Steam to install $dir (app $id): confirm in Steam"
-    steam_url "steam://install/$id"
+WIZ_TITLES=(
+  ""
+  "Check Steam and VRChat"
+  "Install FEX-Emu"
+  "Install Proton Experimental"
+  "Install Proton EasyAntiCheat Runtime"
+  "Get and verify packages"
+  "Deploy the PCVR runtime"
+  "Let Steam see Proton"
+  "Apply and verify VRChat settings"
+)
+WIZ_OP="" WIZ_TOTAL=8 WIZ_STEP=1 WIZ_STATE=running WIZ_SUB="" WIZ_REASON="" WIZ_APP_ID="" WIZ_DOWNLOAD=false WIZ_GAME_PENDING=false
+WIZ_RES_STATE=("" pending pending pending pending pending pending pending pending)
+WIZ_RES_NOTE=("" "" "" "" "" "" "" "" "")
+INTENT_RES="" INTENT_FEXSRC="" INTENT_DFRSRC="" INTENT_VIDEOSRC="" INTENT_MFSRC="" INTENT_RESTARTED="" INTENT_REQUESTED=""
+
+wizard_write_progress() {
+  mkdir -p "$data"
+  local args=(
+    "$data/setup-progress.json" "$_WIZARD_PID" "$WIZ_OP" "$WIZ_STATE" "$WIZ_STEP" "$WIZ_TOTAL"
+    "${WIZ_TITLES[$WIZ_STEP]:-}" "$WIZ_SUB" "$WIZ_REASON" "$WIZ_APP_ID" "$WIZ_DOWNLOAD" "$WIZ_GAME_PENDING"
+  )
+  local i
+  for ((i = 1; i <= WIZ_TOTAL; i++)); do
+    args+=("${WIZ_TITLES[$i]}" "${WIZ_RES_STATE[$i]}" "${WIZ_RES_NOTE[$i]}")
   done
-  ((missing)) && echo "run frame-vrc setup again when Steam is done" || echo "all installed"
+  python3 -I - "${args[@]}" <<'PY'
+import json, os, sys
+p, pid, op, state, step, total, title, sub, reason, app_id, dl, gp, *rest = sys.argv[1:]
+step, total = int(step), int(total)
+dl, gp = (dl == "true"), (gp == "true")
+results = []
+for i in range(total):
+    results.append({"step": i + 1, "title": rest[i * 3], "state": rest[i * 3 + 1], "note": rest[i * 3 + 2]})
+if state == "running":
+    actions = ["log"]
+elif state == "waiting_user":
+    actions = ["reopen", "log"] if app_id else ["log"]
+elif state == "waiting_steam":
+    actions = ["log"]
+elif state in ("failed", "interrupted"):
+    actions = ["retry", "log"]
+else:
+    actions = []
+doc = {
+    "active": True, "pid": int(pid), "op": op, "state": state, "step": step, "total": total,
+    "title": title, "sub": sub, "reason": reason, "app_id": app_id, "download": dl,
+    "actions": actions, "game_pending": gp, "alive": state in ("running", "waiting_user", "waiting_steam"),
+    "results": results,
+}
+tmp = f"{p}.tmp.{os.getpid()}"
+with open(tmp, "w", encoding="utf-8") as f:
+    json.dump(doc, f, separators=(",", ":"))
+os.replace(tmp, p)
+PY
 }
 
-# The PCVR version: the patched FEX, the Proton copy (Steam restarts once when it has not listed it), VRChat's
-# compatibility tool, the resolution, the launch options. Steam updates VRChat to the PC build itself (when it is
-# launched at the latest); a new install opens Steam's install prompt.
+wizard_sub() {
+  ((_WIZARD_ACTIVE)) || return 0
+  WIZ_SUB=$1
+  echo "  -> $1"
+  wizard_write_progress
+}
+
+wizard_step_start() {
+  WIZ_STEP=$1 WIZ_STATE=running WIZ_SUB="" WIZ_REASON="" WIZ_APP_ID="" WIZ_DOWNLOAD=false
+  WIZ_RES_STATE[$1]=running WIZ_RES_NOTE[$1]=""
+  echo "==> [$1/$WIZ_TOTAL] ${WIZ_TITLES[$1]}"
+  wizard_write_progress
+}
+
+wizard_step_done() {
+  WIZ_RES_STATE[$1]=done
+  WIZ_RES_NOTE[$1]=${2:-}
+  WIZ_SUB="" WIZ_REASON="" WIZ_APP_ID="" WIZ_DOWNLOAD=false
+  wizard_write_progress
+}
+
+wizard_fail() {
+  WIZ_STATE=failed WIZ_REASON=$1 WIZ_DOWNLOAD=false
+  WIZ_RES_STATE[$WIZ_STEP]=failed
+  WIZ_RES_NOTE[$WIZ_STEP]=$1
+  wizard_write_progress
+}
+
+wizard_intent_load() {
+  INTENT_RES="" INTENT_FEXSRC="" INTENT_DFRSRC="" INTENT_VIDEOSRC="" INTENT_MFSRC="" INTENT_RESTARTED="" INTENT_REQUESTED=""
+  [[ -f $data/setup-intent ]] || return 0
+  local k v
+  while IFS='=' read -r k v; do
+    case $k in
+      RES) INTENT_RES=$v ;;
+      FEXSRC) INTENT_FEXSRC=$v ;;
+      DFRSRC) INTENT_DFRSRC=$v ;;
+      VIDEOSRC) INTENT_VIDEOSRC=$v ;;
+      MFSRC) INTENT_MFSRC=$v ;;
+      RESTARTED) INTENT_RESTARTED=$v ;;
+      REQUESTED_APPS) INTENT_REQUESTED=$v ;;
+    esac
+  done <"$data/setup-intent"
+}
+
+wizard_intent_save() {
+  mkdir -p "$data"
+  local tmp=$data/setup-intent.tmp.$$
+  {
+    [[ -z $INTENT_RES ]] || printf 'RES=%s\n' "$INTENT_RES"
+    [[ -z $INTENT_FEXSRC ]] || printf 'FEXSRC=%s\n' "$INTENT_FEXSRC"
+    [[ -z $INTENT_DFRSRC ]] || printf 'DFRSRC=%s\n' "$INTENT_DFRSRC"
+    [[ -z $INTENT_VIDEOSRC ]] || printf 'VIDEOSRC=%s\n' "$INTENT_VIDEOSRC"
+    [[ -z $INTENT_MFSRC ]] || printf 'MFSRC=%s\n' "$INTENT_MFSRC"
+    [[ -z $INTENT_RESTARTED ]] || printf 'RESTARTED=%s\n' "$INTENT_RESTARTED"
+    [[ -z $INTENT_REQUESTED ]] || printf 'REQUESTED_APPS=%s\n' "$INTENT_REQUESTED"
+  } >"$tmp"
+  mv "$tmp" "$data/setup-intent"
+}
+
+wizard_intent_has_req() { [[ ",$INTENT_REQUESTED," == *",$1,"* ]]; }
+wizard_intent_add_req() {
+  wizard_intent_has_req "$1" && return 0
+  INTENT_REQUESTED="${INTENT_REQUESTED:+$INTENT_REQUESTED,}$1"
+  wizard_intent_save
+}
+
+wizard_prev_unfinished() {
+  [[ -f $data/setup-progress.json ]] || return 1
+  python3 -I -c 'import json,sys
+try:
+ d=json.load(open(sys.argv[1]))
+ sys.exit(0 if d.get("op")=="setup" and d.get("state")!="done" else 1)
+except Exception: sys.exit(1)' "$data/setup-progress.json" 2>/dev/null
+}
+
+# A pid a setup task wrote down, and still that task: pids are reused (a file left by a task that died with the
+# headset can name any process after a reboot), so the process must also be a frame-vrc.
+wizard_task_alive() {
+  [[ $1 =~ ^[0-9]+$ ]] && (($1 > 0)) && kill -0 "$1" 2>/dev/null &&
+    [[ $(ps -o args= -p "$1" 2>/dev/null) == *frame-vrc* ]]
+}
+wizard_progress_pid() {
+  python3 -I -c 'import json,sys
+try: print(int(json.load(open(sys.argv[1])).get("pid") or 0))
+except Exception: print(0)' "$data/setup-progress.json" 2>/dev/null || echo 0
+}
+# VRChat itself still to install or update to the PC build (looked at now, not when setup finished)
+game_pending() {
+  refresh_paths
+  ! [[ -f $acf && -f $gamedir/$name.exe && ! -d $apps/downloading/$appid ]]
+}
+
+wizard_lock_acquire() {
+  mkdir -p "$data"
+  local lock=$data/setup.lock
+  if ! mkdir "$lock" 2>/dev/null; then
+    local opid=""
+    [[ -f $lock/pid ]] && opid=$(cat "$lock/pid" 2>/dev/null || true)
+    if [[ -z $opid ]]; then
+      sleep 0.2
+      opid=$(cat "$lock/pid" 2>/dev/null || true)
+    fi
+    if wizard_task_alive "$opid"; then
+      echo "frame-vrc: another setup or install-deps task is already running (pid $opid)" >&2
+      exit 1
+    fi
+    rm -rf "$lock"
+    mkdir "$lock" 2>/dev/null || { echo "frame-vrc: setup lock busy" >&2; exit 1; }
+  fi
+  printf '%s\n' "$$" >"$lock/pid"
+}
+
+wizard_on_exit() {
+  local rc=$?
+  _cleanup_tmps
+  if ((_WIZARD_ACTIVE)) && [[ ${BASHPID:-$$} == "$_WIZARD_PID" ]]; then
+    if ((rc != 0)) && [[ $WIZ_STATE == running ]]; then
+      local err=""
+      [[ -f $data/.wizard-err.$_WIZARD_PID ]] && err=$(cat "$data/.wizard-err.$_WIZARD_PID" 2>/dev/null || true)
+      wizard_fail "${err:-Command failed (exit $rc)}"
+    fi
+    rm -f "$data/.wizard-err.$_WIZARD_PID"
+    rm -rf "$data/setup.lock"
+  fi
+}
+
+wizard_on_signal() {
+  if ((_WIZARD_ACTIVE)) && [[ ${BASHPID:-$$} == "$_WIZARD_PID" ]]; then
+    if [[ $WIZ_STATE == running || $WIZ_STATE == waiting_* ]]; then
+      WIZ_STATE=interrupted
+      [[ -n $WIZ_REASON ]] || WIZ_REASON="Setup was interrupted"
+      wizard_write_progress
+    fi
+    rm -f "$data/.wizard-err.$_WIZARD_PID"
+    rm -rf "$data/setup.lock"
+  fi
+  exit 130
+}
+
+wizard_stop_and_clear() {
+  local p="" f
+  for f in "$data/setup.lock/pid" "$data/setup-progress.json"; do
+    [[ -f $f ]] || continue
+    if [[ $f == *.json ]]; then p=$(wizard_progress_pid); else p=$(cat "$f" 2>/dev/null || true); fi
+    if [[ $p != "$$" ]] && wizard_task_alive "$p"; then
+      kill -TERM "$p" 2>/dev/null || true
+      local i; for i in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$p" 2>/dev/null || break; sleep 0.2; done
+      kill -0 "$p" 2>/dev/null && kill -KILL "$p" 2>/dev/null || true
+    fi
+  done
+  rm -f "$data/setup-progress.json" "$data/setup-progress.json.tmp."* \
+        "$data/setup-intent" "$data/setup-intent.tmp."* \
+        "$data/setup-reopen" "$data/setup-reopen.tmp."* "$data/.wizard-err."*
+  rm -rf "$data/setup.lock"
+}
+
+wizard_dep_step() {
+  local step=$1 dep_id=$2 lbl; lbl=$(dep_label "$dep_id")
+  wizard_step_start "$step"
+  if dep_ready "$dep_id"; then
+    echo "ok: $lbl"
+    wizard_step_done "$step"
+    return 0
+  fi
+  local timeout=${FRAME_VRC_DEP_TIMEOUT:-1800}
+  WIZ_APP_ID=$dep_id
+  if dep_downloading "$dep_id"; then
+    WIZ_STATE=waiting_steam WIZ_DOWNLOAD=true WIZ_REASON="Steam is downloading $lbl"
+    WIZ_RES_STATE[$step]=waiting
+    wizard_write_progress
+    echo "waiting: Steam is downloading $lbl (app $dep_id); resume with: frame-vrc $WIZ_OP"
+  else
+    if ! wizard_intent_has_req "$dep_id"; then
+      echo "asking Steam to install $lbl (app $dep_id): confirm in Steam"
+      steam_url "steam://install/$dep_id" ||
+        die "could not open Steam install prompt for $lbl (app $dep_id): install it in Steam, then retry"
+      wizard_intent_add_req "$dep_id"
+    else
+      echo "waiting for $lbl (app $dep_id): confirm the install in Steam (reopen: frame-vrc setup-reopen)"
+    fi
+    WIZ_STATE=waiting_user WIZ_DOWNLOAD=false WIZ_REASON="Confirm the install in Steam"
+    WIZ_RES_STATE[$step]=waiting
+    wizard_write_progress
+  fi
+
+  local elapsed=0 req new_dl new_state new_reason
+  while ((elapsed < timeout)); do
+    if dep_ready "$dep_id"; then
+      echo "ok: $lbl"
+      wizard_step_done "$step"
+      return 0
+    fi
+    if [[ -f $data/setup-reopen ]]; then
+      req=$(head -1 "$data/setup-reopen" 2>/dev/null || true)
+      rm -f "$data/setup-reopen"
+      if [[ $req == "$dep_id" ]]; then
+        echo "reopening Steam install prompt for $lbl (app $dep_id)"
+        steam_url "steam://install/$dep_id" || {
+          WIZ_REASON="Could not reopen Steam install prompt for $lbl"
+          wizard_write_progress
+        }
+      fi
+    fi
+    if dep_downloading "$dep_id"; then
+      new_dl=true new_state=waiting_steam new_reason="Steam is downloading $lbl"
+    else
+      new_dl=false new_state=waiting_user new_reason="Confirm the install in Steam"
+    fi
+    if [[ $new_dl != "$WIZ_DOWNLOAD" || $new_state != "$WIZ_STATE" || $new_reason != "$WIZ_REASON" ]]; then
+      WIZ_DOWNLOAD=$new_dl WIZ_STATE=$new_state WIZ_REASON=$new_reason
+      WIZ_RES_STATE[$step]=waiting
+      wizard_write_progress
+      [[ $new_dl == true ]] && echo "Steam is downloading $lbl (app $dep_id) ..."
+    fi
+    sleep 1
+    ((elapsed += 1))
+  done
+
+  WIZ_RES_STATE[$step]=waiting
+  wizard_write_progress
+  echo "frame-vrc: waiting for $lbl ($WIZ_REASON); resume with: frame-vrc $WIZ_OP"
+  return 2
+}
+
+wizard_run() {
+  local op=$1
+  WIZ_OP=$op
+  [[ $op == install-deps ]] && WIZ_TOTAL=4 || WIZ_TOTAL=8
+  WIZ_STEP=1 WIZ_STATE=running WIZ_SUB="" WIZ_REASON="" WIZ_APP_ID="" WIZ_DOWNLOAD=false WIZ_GAME_PENDING=false
+  local i
+  for i in 1 2 3 4 5 6 7 8; do WIZ_RES_STATE[$i]=pending WIZ_RES_NOTE[$i]=""; done
+  _WIZARD_ACTIVE=1
+  _WIZARD_PID=$$
+  rm -f "$data/.wizard-err.$_WIZARD_PID" "$data/setup-reopen"
+  trap 'wizard_on_exit' EXIT
+  trap 'wizard_on_signal' INT TERM
+
+  # Step 1: Check Steam and VRChat
+  wizard_step_start 1
+  refresh_paths
+  steamapi ping >/dev/null 2>&1 || die "Steam does not answer: start Steam, then run this again"
+  if [[ $op == setup ]]; then
+    if [[ ! -f $acf && $(steamapi owned "$appid" 2>/dev/null) != 1 ]]; then
+      steam_url "steam://store/$appid" || true
+      die "$name is not in your Steam library: add it on its store page (free), then run frame-vrc setup again"
+    fi
+    quit_first
+  fi
+  wizard_step_done 1
+
+  # Steps 2-4: Sequential Steam runtime dependencies (one prompt at a time)
+  local row step id
+  for row in "${DEPS[@]}"; do
+    IFS='|' read -r step id _ _ <<<"$row"
+    wizard_dep_step "$step" "$id" || exit $?
+  done
+
+  if [[ $op == install-deps ]]; then
+    INTENT_REQUESTED=""
+    if [[ -n $INTENT_RES || -n $INTENT_FEXSRC || -n $INTENT_DFRSRC || -n $INTENT_VIDEOSRC || -n $INTENT_MFSRC || -n $INTENT_RESTARTED ]]; then
+      wizard_intent_save
+    else
+      rm -f "$data/setup-intent"
+    fi
+    WIZ_STATE=done WIZ_STEP=4 WIZ_APP_ID="" WIZ_DOWNLOAD=false WIZ_SUB="" WIZ_REASON=""
+    wizard_write_progress
+    echo "all installed"
+    return 0
+  fi
+
+  # Step 5: Get and verify packages
+  wizard_step_start 5
+  local fexsrc=$INTENT_FEXSRC dfrsrc=$INTENT_DFRSRC videosrc=$INTENT_VIDEOSRC mfsrc=$INTENT_MFSRC res=$INTENT_RES
+  if [[ -n $fexsrc ]]; then
+    wizard_sub "${fexsrc##*/}"
+    cmd_fetch "$fexsrc"; pin "$work/stage" "$fexsrc"
+  fi
+  if [[ -n $dfrsrc ]]; then
+    wizard_sub "${dfrsrc##*/}"
+    pkg_fetch dfr "$dfr_pkg" "$dfr_files" "$dfrsrc"; pin "$dfr_pkg" "$dfrsrc"
+  fi
+  if [[ -n $videosrc ]]; then
+    wizard_sub "${videosrc##*/}"
+    pkg_fetch video "$video_pkg" "$video_files" "$videosrc"; pin "$video_pkg" "$videosrc"; gst_cache_reset
+  fi
+  if [[ -n $mfsrc ]]; then
+    wizard_sub "${mfsrc##*/}"
+    pkg_fetch mf "$mf_pkg" "$mf_files" "$mfsrc"; pin "$mf_pkg" "$mfsrc"
+  fi
+  packages_get
+  wizard_step_done 5
+
+  # Step 6: Deploy the PCVR runtime
+  wizard_step_start 6
+  wizard_sub "compiling runtime"
+  runtime_install
+  wizard_sub "private FEX"
+  refresh_paths
+  pfex_install
+  refresh_paths
+  cfg_set EAC_RUNTIME "$eac_rt"
+  wizard_sub "DFR Proton copy"
+  refresh_paths
+  dfr_copy
+  wizard_step_done 6
+
+  # Step 7: Let Steam see Proton (restart at most once per setup run/resume cycle)
+  wizard_step_start 7
+  local restarted=0
+  if steam_lists_copy; then
+    INTENT_RESTARTED=""
+    wizard_intent_save
+    wizard_step_done 7
+  elif [[ $INTENT_RESTARTED == 1 ]]; then
+    die "Steam already restarted once, but $dfr_name is still not listed: restart Steam manually and retry frame-vrc setup"
+  else
+    INTENT_RESTARTED=1
+    wizard_intent_save
+    WIZ_SUB="restarting Steam"
+    wizard_write_progress
+    steam_restart
+    # Steam logs its tool list a little after its API answers
+    for i in $(seq 1 30); do steam_lists_copy && break; sleep 2; done
+    steam_lists_copy || die "Steam restarted, but $dfr_name is still not listed: check $steam/logs/compat_log.txt and retry"
+    INTENT_RESTARTED=""
+    wizard_intent_save
+    restarted=1
+    wizard_step_done 7
+  fi
+
+  # Step 8: Apply and verify VRChat settings
+  wizard_step_start 8
+  quit_first
+  wizard_sub "compatibility tool"
+  set_compat_tool "$dfr_tool" || die "Steam did not take $dfr_name"
+  [[ $(compat_tool) == "$dfr_tool" ]] || die "compatibility tool verification failed"
+  echo "$name's compatibility tool: $dfr_name"
+
+  wizard_sub "render resolution"
+  [[ -z $res ]] || cfg_set RES "$res"
+  if ((restarted)); then  # SteamVR restarted with Steam: give it a minute to answer
+    for i in $(seq 1 30); do [[ -n $(res_get) ]] && break; sleep 2; done
+  fi
+  local res_note=""
+  (_WIZARD_NOFAIL=1; res_apply) || {
+    res_note="start SteamVR and run: frame-vrc resolution $(cfg RES)"
+    echo "frame-vrc: $res_note" >&2
+  }
+
+  wizard_sub "launch options"
+  cmd_launch_options set
+  [[ "$(opts_get 2>/dev/null || true)" == "$(run_line)" ]] || die "launch options verification failed"
+
+  local k; for k in PROTON VIDEO DFR CPUS DXVK_THREADS VRAM; do cfg_unset "$k"; done  # older frame-vrc's settings
+  # last: frame-vrc 0.7's patched build out of Steam's FEX-Emu, once the above no longer needs it there
+  steam_fex_restore || echo "frame-vrc: $name does not need it any more; other games run on it as it is" >&2
+
+  if ! game_pending; then
+    WIZ_GAME_PENDING=false
+    echo "patched: ready to launch $name"
+  elif [[ -f $acf ]]; then
+    WIZ_GAME_PENDING=true
+    echo "patched: update and launch $name (Steam updates it to the PC build first when needed)"
+  else
+    WIZ_GAME_PENDING=true
+    echo "patched: install $name now (~1.1 GB): confirm Steam's install prompt"
+    steam_url "steam://install/$appid" || true
+  fi
+  rm -f "$data/setup-intent"
+  WIZ_STATE=done WIZ_STEP=8 WIZ_SUB="" WIZ_REASON="" WIZ_APP_ID="" WIZ_DOWNLOAD=false
+  wizard_step_done 8 "$res_note"
+}
+
+cmd_install_deps() {
+  wizard_lock_acquire
+  wizard_intent_load
+  wizard_run install-deps
+}
+
 cmd_setup() {
-  local res="" fexsrc="" dfrsrc="" videosrc="" mfsrc="" restarted=0
+  local res="" fexsrc="" dfrsrc="" videosrc="" mfsrc="" has_args=0
   while (($#)); do
+    has_args=1
     case $1 in
       --resolution) res=${2:?--resolution N}; shift 2 ;;
       --dfr) dfrsrc=${2:?--dfr URL|FILE}; shift 2 ;;
@@ -482,55 +1011,114 @@ cmd_setup() {
     esac
   done
   if [[ -n $res ]]; then [[ $res =~ ^[0-9]+$ ]] && ((res >= 360 && res <= 4096)) || die "--resolution: 360-4096 (1056, 1440, 1920)"; fi
-  step() { echo "==> [$1/6] $2"; }
-  step 1 "Checking Steam"
-  steamapi ping >/dev/null 2>&1 || die "Steam does not answer: start Steam, then run this again"
-  [[ -f $acf || $(steamapi owned "$appid" 2>/dev/null) == 1 ]] ||
-    { steam_url "steam://store/$appid"; die "$name is not in your Steam library: add it on its store page (free), then again"; }
-  local d
-  for d in "$fex" "$proton_exp" "$eac_rt"; do
-    [[ -d $d ]] || { cmd_install_deps; die "confirm the installs in Steam, then run frame-vrc setup again"; }
-    echo "ok: ${d##*/}"
-  done
-  quit_first
-  step 2 "Downloading frame-vrc's packages (patched FEX, DFR DXVK, H.264 plugin)"
-  [[ -z $fexsrc ]] || { cmd_fetch "$fexsrc"; pin "$work/stage" "$fexsrc"; }
-  [[ -z $dfrsrc ]] || { pkg_fetch dfr "$dfr_pkg" "$dfr_files" "$dfrsrc"; pin "$dfr_pkg" "$dfrsrc"; }
-  [[ -z $videosrc ]] || { pkg_fetch video "$video_pkg" "$video_files" "$videosrc"; pin "$video_pkg" "$videosrc"; gst_cache_reset; }
-  [[ -z $mfsrc ]] || { pkg_fetch mf "$mf_pkg" "$mf_files" "$mfsrc"; pin "$mf_pkg" "$mfsrc"; }
-  packages_get
-  step 3 "ji10me's runtime with the patched FEX, for $name only"
-  runtime_install
-  pfex_install
-  cfg_set EAC_RUNTIME "$eac_rt"
-  step 4 "$dfr_name"
-  dfr_copy
-  steam_lists_copy || { steam_restart; restarted=1; }
-  set_compat_tool "$dfr_tool" || die "Steam did not take $dfr_name"
-  echo "$name's compatibility tool: $dfr_name"
-  step 5 "Render resolution"
-  [[ -z $res ]] || cfg_set RES "$res"
-  if ((restarted)); then  # SteamVR restarted with Steam: give it a minute to answer
-    local i; for i in $(seq 1 30); do [[ -n $(res_get) ]] && break; sleep 2; done
+
+  wizard_lock_acquire
+  wizard_intent_load
+  if ((has_args)); then
+    INTENT_RES=$res INTENT_FEXSRC=$fexsrc INTENT_DFRSRC=$dfrsrc INTENT_VIDEOSRC=$videosrc INTENT_MFSRC=$mfsrc
+    wizard_intent_save
+  elif ! wizard_prev_unfinished && [[ ! -f $data/setup-intent ]]; then
+    INTENT_RES="" INTENT_FEXSRC="" INTENT_DFRSRC="" INTENT_VIDEOSRC="" INTENT_MFSRC="" INTENT_RESTARTED=""
   fi
-  (res_apply) || echo "frame-vrc: start SteamVR and run: frame-vrc resolution $(cfg RES)" >&2
-  step 6 "Launch options"
-  cmd_launch_options set
-  local k; for k in PROTON VIDEO DFR CPUS DXVK_THREADS VRAM; do cfg_unset $k; done  # older frame-vrc's settings
-  # last: frame-vrc 0.7's patched build out of Steam's FEX-Emu, once the above no longer needs it there
-  steam_fex_restore || echo "frame-vrc: $name does not need it any more; other games run on it as it is" >&2
-  if [[ -f $acf ]]; then
-    echo "patched: update and launch $name (Steam updates it to the PC build first when needed)"
-  else
-    echo "patched: install $name now (~1.1 GB): confirm Steam's install prompt"
-    steam_url "steam://install/$appid"
+  wizard_run setup
+}
+
+cmd_setup_status() {
+  local json=false
+  [[ ${1:-} == --json ]] && json=true
+  if [[ ! -f $data/setup-progress.json ]]; then
+    $json && echo '{"active":false}' || echo "no active setup"
+    return 0
   fi
+  local alive=0 pending=0
+  wizard_task_alive "$(wizard_progress_pid)" && alive=1
+  game_pending && pending=1
+  python3 -I - "$data/setup-progress.json" "$($json && echo 1 || echo 0)" "$alive" "$pending" <<'PY'
+import json, os, sys
+p, as_json = sys.argv[1], sys.argv[2] == "1"
+alive, pending_now = sys.argv[3] == "1", sys.argv[4] == "1"
+try:
+    with open(p, encoding="utf-8") as f:
+        d = json.load(f)
+except Exception:
+    print('{"active":false}' if as_json else "no active setup")
+    sys.exit(0)
+state = d.get("state") or ""
+reason = d.get("reason") or ""
+app_id = d.get("app_id") or ""
+if not alive and state in ("running", "waiting_user", "waiting_steam"):
+    state = "interrupted"
+    if not reason:
+        reason = "Setup was interrupted"
+if state == "running":
+    actions = ["log"]
+elif state == "waiting_user":
+    actions = ["reopen", "log"] if app_id else ["log"]
+elif state == "waiting_steam":
+    actions = ["log"]
+elif state in ("failed", "interrupted"):
+    actions = ["retry", "log"]
+else:
+    actions = []
+out = {
+    "active": bool(d.get("active", True)),
+    "op": d.get("op", "setup"),
+    "state": state,
+    "step": int(d.get("step") or 0),
+    "total": int(d.get("total") or 0),
+    "title": d.get("title") or "",
+    "sub": d.get("sub") or "",
+    "reason": reason,
+    "app_id": app_id,
+    "download": bool(d.get("download", False)),
+    "actions": actions,
+    # a finished setup waits on VRChat only while Steam still has to install or update it
+    "game_pending": bool(d.get("game_pending", False)) and (state != "done" or pending_now),
+    "alive": alive,
+    "results": d.get("results") or [],
+}
+if as_json:
+    print(json.dumps(out, separators=(",", ":")))
+else:
+    print(f"setup-status: {out['op']} {out['state']} [{out['step']}/{out['total']}] {out['title']}")
+    if out["sub"]:
+        print(f"  sub: {out['sub']}")
+    if out["reason"]:
+        print(f"  reason: {out['reason']}")
+PY
+}
+
+cmd_setup_reopen() {
+  [[ -f $data/setup-progress.json ]] || die "no active setup task"
+  local app_id
+  wizard_task_alive "$(wizard_progress_pid)" || die "no live setup task is running (run: frame-vrc setup)"
+  app_id=$(python3 -I - "$data/setup-progress.json" <<'PY'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        d = json.load(f)
+except Exception:
+    sys.exit("invalid setup-progress.json")
+if d.get("state") not in ("waiting_user", "waiting_steam"):
+    sys.exit(f"setup task is not waiting on a dependency (state: {d.get('state')})")
+app_id = str(d.get("app_id") or "")
+if int(d.get("step") or 0) not in (2, 3, 4) or app_id not in ("3127680", "1493710", "1826330"):
+    sys.exit("setup task is not waiting on a dependency step")
+print(app_id)
+PY
+) || exit 1
+  local tmp=$data/setup-reopen.tmp.$$
+  printf '%s\n' "$app_id" >"$tmp"
+  mv "$tmp" "$data/setup-reopen"
+  echo "requested Steam to reopen install prompt for $(dep_label "$app_id") (app $app_id)"
 }
 
 # The official version: Lepton (Steam updates VRChat to the Android build), your own launch options (none, as Steam
 # ships them) and resolution. The patched FEX and the Proton copy stay, to switch back with frame-vrc setup;
 # frame-vrc uninstall removes them. --quiet: no closing line (uninstall goes on).
 cmd_official() {
+  wizard_stop_and_clear
+  refresh_paths
   quit_first
   steamapi ping >/dev/null 2>&1 || die "Steam does not answer: start Steam, then run this again"
   # also when VRChat is not installed: the choice stays in Steam and would install it on a deleted tool later
@@ -555,6 +1143,7 @@ jstr() { local v=${1//\\/\\\\}; printf '"%s"' "${v//\"/\\\"}"; }
 # that do it, "" = none), ns_alt (a second choice), ns_text and ns_opts (the launch options). Read from what is there
 # when asked, never waited for: Steam shows its own download progress, the user checks again when it is done.
 next_step() {
+  refresh_paths
   local ed
   ns_fix="" ns_alt="" ns_opts=""
   if ! ns_opts=$(opts_get 2>/dev/null) || ! steamapi ping >/dev/null 2>&1; then
@@ -575,7 +1164,7 @@ next_step() {
     ns_text="the official version (Lepton, Valve's setup)"
     if ours "$ns_opts"; then ns_alt=official ns_text+="; frame-vrc's launch options are still set (official clears them)"; fi
     [[ $(game_build) != pc ]] || ns_text+=": launch $name, Steam updates it to the official build first"
-  elif [[ ! -d $fex || ! -d $proton_exp || ! -d $eac_rt ]]; then
+  elif ! deps_all_present; then
     ns_step=deps ns_fix=install-deps ns_text="Steam has to install FEX-Emu, Proton Experimental and the EasyAntiCheat runtime"
   elif [[ $ed != community || $(pfex_state) == missing || $(dfr_state) == missing || $ns_opts != "$(run_line)" ]]; then
     ns_step=patch ns_fix=setup ns_alt=official
@@ -602,6 +1191,7 @@ cmd_next() {
 }
 
 cmd_status() {
+  refresh_paths
   local s res tool launch rt
   next_step
   s=$(pfex_state) res=$(res_get) tool=$(compat_tool)
@@ -663,13 +1253,34 @@ cmd_doctor() {
   curl -fsI -m 5 https://github.com >/dev/null 2>&1 && row ok "" "network: github.com reachable" ||
     row warn "" "network: github.com unreachable (required for setup and update)"
   section steam
+  refresh_paths
   steamapi ping >/dev/null 2>&1 && row ok "" "Steam is running" || row fail "" "Steam is not responding (start Steam)"
-  [[ -d $fex ]] && row ok "" "FEX-Emu $(describe "$fex")" || row "$([[ $(edition) == official ]] && echo ok || echo fail)" install-deps "FEX-Emu not installed"
-  [[ $(describe "$fex") != eac-* ]] || row warn "" "Steam's FEX-Emu contains a legacy patched build (run setup or official to restore Valve's build)"
   local ed tool dep=fail; ed=$(edition) tool=$(compat_tool)
   [[ $ed == official ]] && dep=ok  # the official version needs none of Steam's x86 tools
-  [[ -d $proton_exp ]] && row ok "" "Proton Experimental $(cut -d' ' -f2 "$proton_exp/version" 2>/dev/null)" || row $dep install-deps "Proton Experimental not installed"
-  [[ -d $eac_rt ]] && row ok "" "Proton EasyAntiCheat Runtime" || row $dep install-deps "Proton EasyAntiCheat Runtime not installed"
+  local drow did dlbl ddir dextra
+  for drow in "${DEPS[@]}"; do
+    IFS='|' read -r _ did _ dlbl <<<"$drow"
+    ddir=$(dep_path "$did")
+    if dep_ready "$did"; then
+      dextra=""
+      case $did in
+        3127680) dextra=" $(describe "$ddir")" ;;
+        1493710) dextra=" $(cut -d' ' -f2 "$ddir/version" 2>/dev/null)" ;;
+      esac
+      row ok "" "${dlbl}${dextra}"
+    elif dep_files_ok "$did" "$ddir"; then
+      row warn "" "$dlbl is being updated by Steam (setup waits for it to finish)"
+    elif dep_downloading "$did"; then
+      row $dep install-deps "$dlbl is downloading in Steam"
+    elif [[ -d $ddir ]]; then
+      row $dep install-deps "$dlbl incomplete in Steam"
+    else
+      row $dep install-deps "$dlbl not installed"
+    fi
+    if [[ $did == 3127680 ]]; then
+      [[ $(describe "$ddir") != eac-* ]] || row warn "" "Steam's FEX-Emu contains a legacy patched build (run setup or official to restore Valve's build)"
+    fi
+  done
   section "$name"
   case $ed in
     "") [[ $(steamapi owned "$appid" 2>/dev/null) == 1 ]] && row fail setup "not installed" || row fail store "not in your Steam library" ;;
@@ -760,7 +1371,7 @@ cmd_pack() {
 # is kept as stage.prev.
 cmd_fetch() {
   local src=${1:-${FRAME_VRC_FEX_URL:-}} tmp f
-  tmp=$(mktemp -d); trap "rm -rf '$tmp'" EXIT
+  tmp=$(mktemp -d); _TMP_DIRS+=("$tmp")
   [[ -n $src ]] || die "usage: frame-vrc fetch https://.../fex-<version>-steamframe-aarch64.tar.gz | FILE.tar.gz (its .sha256 next to it)"
   f=$(get_checked "$src" "$tmp") || exit 1  # it said why
   [[ $(tar tzf "$f" | sed 's|^\./||; s|/.*||' | sort -u) == stage ]] || die "unexpected archive layout (not a stage/ folder)"
@@ -1011,6 +1622,7 @@ print(max((r["tag_name"] for r in json.load(sys.stdin) if not r["draft"]), key=k
 # After an update (install.sh runs this), for a community version already set up: this release's packages, the
 # patched FEX and the Proton copy where they changed, the launch options in this version's form. Nothing else in Steam.
 cmd_packages() {
+  refresh_paths
   local cur
   if running; then
     echo "frame-vrc: $name is running: the packages are updated by the next frame-vrc setup" >&2
@@ -1106,6 +1718,8 @@ Advanced:
   frame-vrc video check             Check if H.264 hardware decoding is active during video playback
   frame-vrc dfrtest [on|off]        Toggle DFR debug overlay (gaze indicator and DXVK DFR log)
   frame-vrc install-deps            Prompt Steam to install FEX-Emu, Proton Experimental, and EAC Runtime
+  frame-vrc setup-status [--json]   Show current or last setup wizard status
+  frame-vrc setup-reopen            Ask a waiting setup wizard to reopen the current Steam install prompt
   frame-vrc store                   Open VRChat's Steam store page
   frame-vrc swap [8g|1g]            Show swap status or print root commands to configure 8 GB / 1 GB swap
   frame-vrc build [--jobs N] | fetch URL|FILE | pack
@@ -1137,6 +1751,8 @@ case $cmd in
   swap) cmd_swap "$@" ;;
   panel) cmd_panel "$@" ;;
   install-deps) cmd_install_deps "$@" ;;
+  setup-status) cmd_setup_status "$@" ;;
+  setup-reopen) cmd_setup_reopen "$@" ;;
   build) cmd_build "$@" ;;
   fetch) cmd_fetch "$@"; pin "$work/stage" "$1" ;;
   pack) cmd_pack ;;

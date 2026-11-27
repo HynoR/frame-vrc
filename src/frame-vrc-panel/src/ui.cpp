@@ -44,6 +44,91 @@ Color levelColor(const std::string& level) {
     return level == "ok" ? cGreen : level == "warn" ? cAmber : cRed;
 }
 
+bool hasWizard(const Snapshot& s) {
+    return s.setup.active && !(s.setup.state == "done" && !s.setup.gamePending);
+}
+
+bool hasPendingWizard(const Snapshot& s) {
+    return s.setup.active && s.setup.state != "done";
+}
+
+bool isSetupCommand(const std::string& label) {
+    return label == "setup" || label.rfind("setup ", 0) == 0 || label == "install-deps" ||
+           label.rfind("install-deps ", 0) == 0 || label == "community" || label.rfind("community ", 0) == 0;
+}
+
+bool hasAction(const SetupProgress& sp, const std::string& action) {
+    if (sp.actions.empty()) return true;
+    return std::find(sp.actions.begin(), sp.actions.end(), action) != sp.actions.end();
+}
+
+std::string defaultStepTitle(int step) {
+    switch (step) {
+        case 1: return "Check Steam and VRChat";
+        case 2: return "Install FEX-Emu";
+        case 3: return "Install Proton Experimental";
+        case 4: return "Install Proton EasyAntiCheat Runtime";
+        case 5: return "Get and verify packages";
+        case 6: return "Deploy the PCVR runtime";
+        case 7: return "Let Steam see Proton";
+        case 8: return "Apply and verify VRChat settings";
+        default: return "Step " + std::to_string(step);
+    }
+}
+
+std::string localizedStepTitle(int step, const std::string& raw, bool ja) {
+    const std::string en = raw.empty() ? defaultStepTitle(step) : raw;
+    if (!ja) return en;
+    if (en == "Check Steam and VRChat") return "Steam と VRChat を確認";
+    if (en == "Install FEX-Emu") return "FEX-Emu をインストール";
+    if (en == "Install Proton Experimental") return "Proton Experimental をインストール";
+    if (en == "Install Proton EasyAntiCheat Runtime") return "Proton EasyAntiCheat Runtime をインストール";
+    if (en == "Get and verify packages") return "パッケージを取得・検証";
+    if (en == "Deploy the PCVR runtime") return "PCVR ランタイムを配置";
+    if (en == "Let Steam see Proton") return "Steam に Proton を認識させる";
+    if (en == "Apply and verify VRChat settings") return "VRChat 設定を適用・確認";
+    return en;
+}
+
+std::string localizedSub(const std::string& sub, bool ja) {
+    if (!ja) return sub;
+    if (sub == "compiling runtime") return "ランタイムをビルド中";
+    if (sub == "private FEX") return "専用 FEX を配置";
+    if (sub == "DFR Proton copy") return "DFR Proton コピーを作成";
+    if (sub == "restarting Steam") return "Steam を再起動中";
+    if (sub == "compatibility tool") return "互換ツール";
+    if (sub == "render resolution") return "解像度";
+    if (sub == "launch options") return "起動オプション";
+    return sub;
+}
+
+std::string localizedReason(const SetupProgress& sp, bool ja) {
+    if (sp.state == "done" && sp.gamePending)
+        return ja ? "設定完了：VRChat 本体は Steam でインストール／更新が必要です。"
+                  : "Configured; VRChat still needs install/update in Steam.";
+    if (sp.download) return ja ? "Steam がダウンロード中" : "Steam is downloading";
+    if (sp.state == "waiting_user") {
+        if (sp.reason.empty() || sp.reason == "Confirm the install in Steam" ||
+            sp.reason == "Waiting for you to confirm the install in Steam")
+            return ja ? "Steam でインストールの確認を行ってください" : "Waiting for you to confirm the install in Steam";
+        return sp.reason;
+    }
+    if (sp.state == "waiting_steam") {
+        if (!sp.reason.empty()) return sp.reason;
+        return ja ? "Steam の完了を待っています…" : "Waiting for Steam to finish…";
+    }
+    if (sp.state == "failed" || sp.state == "interrupted") {
+        if (!sp.reason.empty()) return sp.reason;
+        return sp.state == "interrupted"
+                   ? (ja ? "セットアップが途中で停止しました。再試行でこのステップから再開します。"
+                         : "Setup stopped before finishing. Retry to resume from this step.")
+                   : (ja ? "このステップで失敗しました。ログを確認するか再試行してください。"
+                         : "Step failed. View log for details or retry this step.");
+    }
+    if (!sp.reason.empty()) return sp.reason;
+    return ja ? "処理中…" : "Working…";
+}
+
 }  // namespace
 
 int countLevel(const Snapshot& s, const std::string& level) {
@@ -128,6 +213,8 @@ void PanelUi::hint(const Pen& pen, double x, double y, double w, const std::stri
 
 bool PanelUi::needsConfirm(const std::string& id) const {
     if (id == "run:uninstall" || id == "run:uninstall --purge") return true;
+    // Retrying an active/failed wizard step does not need a second confirmation tap.
+    if (id == "run:setup" && hasWizard(last_)) return false;
     // changes VRChat's compatibility tool (Steam downloads the other build); the first setup restarts Steam once
     if (id == "run:official" || id == "run:community" || id == "run:setup") return true;
     // replaces options the user wrote (kept, and put back by "clear")
@@ -162,11 +249,13 @@ void PanelUi::draw(cairo_t* cr, const Snapshot& s) {
     pen.color(cBg);
     cairo_paint(cr);
     drawSidebar(pen, s);
-    // the first answer: a headset not ready yet starts on the Install page
-    if (!viewChosen_ && s.status.known) {
+    // the first answer: a headset not ready yet (or with a running/pending wizard) starts on the Install page
+    const bool wizardPending = hasWizard(s);
+    if (!viewChosen_ && (s.status.known || wizardPending)) {
         viewChosen_ = true;
         const std::string& step = s.status.nextStep;
-        if (view_ == View::Home && !step.empty() && step != "ready" && step != "official") view_ = View::Install;
+        if (view_ == View::Home && (wizardPending || (!step.empty() && step != "ready" && step != "official")))
+            view_ = View::Install;
     }
     // the official version, or VRChat not installed: Home and Install only
     const bool few = s.status.known && (s.status.edition == "official" || s.status.edition.empty());
@@ -210,8 +299,9 @@ void PanelUi::drawSidebar(const Pen& pen, const Snapshot& s) {
     double y = 92;
     for (const auto& it : items) {
         // the official Android build: Home and Install only (the PC build's checks and settings do not apply); the log
-        // while a switch runs
-        if (android && it.v != View::Home && it.v != View::Install && !(it.v == View::Log && (s.running || view_ == View::Log)))
+        // while a switch runs or a wizard is active
+        if (android && it.v != View::Home && it.v != View::Install &&
+            !(it.v == View::Log && (s.running || view_ == View::Log || hasWizard(s) || s.haveResult)))
             continue;
         const bool sel = view_ == it.v;
         const bool hot = hover_ == it.id || pressed_ == it.id;
@@ -227,8 +317,11 @@ void PanelUi::drawSidebar(const Pen& pen, const Snapshot& s) {
         }
         pen.text(32, y + 32, it.label, 18, sel ? cAccent : cText, sel);
         if (it.v == View::Environment && fails > 0) pen.dot(160, y + 25, cRed);
-        if (it.v == View::Install && !s.status.nextStep.empty() && s.status.nextStep != "ready" && !android)
-            pen.dot(160, y + 25, cAmber);
+        if (it.v == View::Install && (hasPendingWizard(s) || (!s.status.nextStep.empty() && s.status.nextStep != "ready" && !android))) {
+            const Color dotC = s.setup.state == "failed" || s.setup.state == "interrupted" ? cRed
+                               : s.setup.active && s.setup.state == "running" ? cAccent : cAmber;
+            pen.dot(160, y + 25, dotC);
+        }
         if (it.v == View::Log && s.running) pen.dot(160, y + 25, cAccent);
         addHit(it.id, 12, y, kSideW - 24, 50, true);
         y += 58;
@@ -317,12 +410,32 @@ void PanelUi::drawHome(const Pen& pen, const Snapshot& s) {
     // ---- VRChat: how it runs, and launch ----
     card(pen, rx, y, kHalfW, lowH, "VRChat");
     const std::string& step = st.nextStep;
+    const bool wizardPending = hasPendingWizard(s);
+    const bool wizardDonePending = s.setup.active && s.setup.state == "done" && s.setup.gamePending;
     if (m.gamePid > 0) {
         std::snprintf(buf, sizeof(buf), ja_ ? "メモリ %.2f GB · %.1f コア分" : "%.2f GB memory · %.1f cores", gb(m.gameRssMb), m.gameCores);
         pen.text(rx + 20, y + 80, buf, 22, cText, true);
         std::snprintf(buf, sizeof(buf), "pid %d · %s", m.gamePid,
                       ("DFR " + st.dfrEffective).c_str());
         pen.text(rx + 20, y + 108, buf, 15, cMuted);
+    } else if (wizardPending) {
+        const bool bad = s.setup.state == "failed" || s.setup.state == "interrupted";
+        const Color wc = bad ? cRed : s.setup.state == "running" ? cAccent : cAmber;
+        const std::string wHead = bad ? tr("Setup Needs Attention", "セットアップの確認が必要")
+                                  : s.setup.state == "waiting_user" ? tr("Setup Waiting for You", "セットアップの操作待ち")
+                                  : s.setup.state == "waiting_steam" ? tr("Setup Waiting for Steam", "Steam の完了待ち")
+                                                                     : tr("Setup in Progress", "セットアップ実行中");
+        pen.text(rx + 20, y + 80, wHead, 22, wc, true);
+        const int tot = s.setup.total > 0 ? s.setup.total : 8;
+        const std::string wText = std::to_string(s.setup.step) + "/" + std::to_string(tot) + " · " +
+                                  localizedStepTitle(s.setup.step, s.setup.title, ja_) + " — " +
+                                  localizedReason(s.setup, ja_);
+        hint(pen, rx + 20, y + 108, kHalfW - 40, wText, 2);
+    } else if (wizardDonePending) {
+        pen.text(rx + 20, y + 80, tr("Patched: update and launch", "パッチ済み：更新して起動"), 22, cGreen, true);
+        hint(pen, rx + 20, y + 108, kHalfW - 40,
+             tr("Configured; VRChat still needs install/update in Steam.",
+                "設定完了：VRChat 本体は Steam でインストール／更新が必要です。"), 2);
     } else if (step == "official") {
         pen.text(rx + 20, y + 80, tr("Official Version", "公式版"), 22, cGreen, true);
         hint(pen, rx + 20, y + 108, kHalfW - 40, tr("Running on Lepton. Switch to the PCVR version on the Install page.",
@@ -345,7 +458,7 @@ void PanelUi::drawHome(const Pen& pen, const Snapshot& s) {
                       st.resolution, st.dfrEffective.c_str());
         pen.text(rx + 20, y + 108, buf, 15, cMuted);
     }
-    const bool ready = step.empty() || step == "ready" || step == "update" || step == "official";
+    const bool ready = !wizardPending && (wizardDonePending || step.empty() || step == "ready" || step == "update" || step == "official");
     if (ready || st.gameRunning)
         mainButton(pen, "run:launch", rx + 20, y + lowH - 90, kHalfW - 40, 70,
                    st.gameRunning ? tr("VRChat is running", "VRChat 実行中") : tr("Launch VRChat", "VRChat を起動"),
@@ -355,6 +468,10 @@ void PanelUi::drawHome(const Pen& pen, const Snapshot& s) {
 }
 
 void PanelUi::drawInstall(const Pen& pen, const Snapshot& s) {
+    if (hasWizard(s)) {
+        drawSetupWizard(pen, s);
+        return;
+    }
     const Status& st = s.status;
     const bool official = st.edition == "official", community = st.edition == "community";
     const std::string& step = st.nextStep;
@@ -459,6 +576,202 @@ void PanelUi::drawInstall(const Pen& pen, const Snapshot& s) {
         pen.text(kX0 + 24, y + 156, ellipsize(pen, text, 20, true, kCW - 48, false), 20, cGreen, true);
     else
         hint(pen, kX0 + 24, y + 146, kCW - 48, text, 3);
+}
+
+void PanelUi::drawSetupWizard(const Pen& pen, const Snapshot& s) {
+    const SetupProgress& sp = s.setup;
+    const int total = sp.total > 0 ? sp.total : 8;
+    const int curStep = std::clamp(sp.step > 0 ? sp.step : 1, 1, total);
+    const bool isDonePending = sp.state == "done" && sp.gamePending;
+    const bool isBad = sp.state == "failed" || sp.state == "interrupted";
+    const bool isWait = sp.state == "waiting_user" || sp.state == "waiting_steam";
+
+    // ---- top card: current step, sub item, reason, ONE main button + small View log ----
+    double y = kTop;
+    const double topH = 236;
+    const std::string opLabel = sp.op == "install-deps"
+                                    ? tr("Steam Dependencies Setup", "Steam 依存ツールセットアップ")
+                                    : tr("PCVR Setup Wizard", "PCVR セットアップウィザード");
+    card(pen, kX0, y, kCW, topH, opLabel);
+    button(pen, "refresh", kX1 - 150, y + 12, 130, 34, s.refreshing ? tr("Checking…", "確認中…") : tr("Check again", "再チェック"),
+           !s.refreshing, false, 15);
+
+    const std::string stepHead =
+        isDonePending
+            ? std::to_string(total) + "/" + std::to_string(total) + " · " + tr("PCVR Setup Complete", "PCVR セットアップ完了")
+            : std::to_string(curStep) + "/" + std::to_string(total) + " · " + localizedStepTitle(curStep, sp.title, ja_);
+    const Color accentC = isDonePending ? cGreen : isBad ? cRed : isWait ? cAmber : cAccent;
+    pen.text(kX0 + 24, y + 66, ellipsize(pen, stepHead, 24, true, kCW - 190, false), 24, isDonePending ? cGreen : cText, true);
+
+    // progress bar
+    const double barW = kCW - 48;
+    const double frac = isDonePending ? 1.0 : std::clamp(static_cast<double>(curStep) / total, 0.0, 1.0);
+    pen.color(cCtl);
+    pen.roundedRect(kX0 + 24, y + 78, barW, 6, 3);
+    cairo_fill(pen.cr);
+    pen.color(accentC);
+    pen.roundedRect(kX0 + 24, y + 78, std::max(12.0, barW * frac), 6, 3);
+    cairo_fill(pen.cr);
+
+    // sub item & reason (step 7 adds the brief view-disappear notice)
+    double infoY = y + 104;
+    if (!sp.sub.empty()) {
+        const std::string subLabel = tr("Item: ", "項目：") + localizedSub(sp.sub, ja_);
+        pen.text(kX0 + 24, infoY, ellipsize(pen, subLabel, 17, true, kCW - 48, false), 17, cText, true);
+        infoY += 23;
+    }
+    std::string reasonText = localizedReason(sp, ja_);
+    Color reasonColor = isDonePending ? cGreen : isBad ? cRed : sp.download ? cAccent : isWait ? cAmber : cMuted;
+    // only while the CLI restarts Steam: step 7 passes at once when Steam already lists the copy
+    if (curStep == 7 && sp.sub == "restarting Steam" && !isDonePending && !isBad) {
+        reasonText = tr("Steam restarts once to register Proton — the view will briefly disappear and resume automatically.",
+                        "Proton を認識させるため Steam を 1 回再起動します。画面が一時的に消えたあと自動で再開します。");
+        reasonColor = cAmber;
+    }
+    for (const std::string& line : wrapText(pen, reasonText, 16, isDonePending, kCW - 48, 2)) {
+        pen.text(kX0 + 24, infoY, line, 16, reasonColor, isDonePending);
+        infoY += 21;
+    }
+
+    // ONE main button + small "View log" button
+    const double logW = 152, btnH = 50, btnY = y + topH - btnH - 14;
+    const double mainW = kCW - 48 - logW - 12;
+    std::string mainId, mainLabel;
+    bool mainEnabled = false;
+    const Color* mainFill = nullptr;
+    static const Color kGreenFill = cGreen;
+    if (isDonePending) {
+        mainId = "run:launch";
+        mainLabel = s.status.gameRunning ? tr("VRChat is running", "VRChat 実行中") : tr("Launch VRChat", "VRChat を起動");
+        mainEnabled = canRun("") && !s.status.gameRunning;
+        mainFill = &kGreenFill;
+    } else if (sp.state == "waiting_user" && !sp.appId.empty() && !sp.download && hasAction(sp, "reopen")) {
+        mainId = "setup:reopen";
+        mainLabel = tr("Reopen Install Prompt", "インストール画面をもう一度開く");
+        mainEnabled = true;
+    } else if (isBad && hasAction(sp, "retry")) {
+        const std::string retryCmd = sp.op == "install-deps" ? "install-deps" : "setup";
+        mainId = "run:" + retryCmd;
+        mainLabel = tr("Retry This Step", "このステップを再試行");
+        mainEnabled = !s.running && canRun(retryCmd);
+    } else {
+        mainId = "setup:busy";
+        mainLabel = sp.download ? tr("Steam is downloading…", "Steam でダウンロード中…")
+                    : sp.state == "waiting_steam" ? tr("Waiting for Steam…", "Steam を待機中…")
+                    : sp.state == "waiting_user" ? tr("Waiting for Steam…", "Steam を待機中…")
+                                                  : tr("Setup Running…", "セットアップ実行中…");
+        mainEnabled = false;
+    }
+    mainButton(pen, mainId, kX0 + 24, btnY, mainW, btnH, mainLabel, mainEnabled, 21, mainFill);
+    button(pen, "view:log", kX1 - 24 - logW, btnY, logW, btnH, tr("View log", "ログを見る"), true, false, 17);
+
+    // ---- bottom card: compact step list (current, previous, next prominent) ----
+    y += topH + kGap;
+    const double lowH = kFootY - 12 - y;
+    card(pen, kX0, y, kCW, lowH, tr("Setup Steps", "セットアップ手順"));
+
+    std::vector<SetupStepResult> steps;
+    steps.reserve(static_cast<size_t>(total));
+    for (int i = 1; i <= total; ++i) {
+        SetupStepResult entry {i, defaultStepTitle(i),
+                               i < curStep || isDonePending ? "done"
+                               : i == curStep ? (sp.state == "waiting_user" || sp.state == "waiting_steam" ? "waiting" : sp.state)
+                                              : "pending",
+                               ""};
+        for (const SetupStepResult& r : sp.results) {
+            if (r.step == i) {
+                entry = r;
+                break;
+            }
+        }
+        steps.push_back(std::move(entry));
+    }
+
+    const int rowsPerCol = (total + 1) / 2;
+    const double colGap = 16;
+    const double colW = (kCW - 48 - colGap) / 2;
+    const double listY = y + 48;
+    const double rowStep = (lowH - 60) / std::max(rowsPerCol, 1);
+    const double boxH = std::min(54.0, rowStep - 6);
+
+    for (int idx = 0; idx < total; ++idx) {
+        const SetupStepResult& r = steps[idx];
+        const int col = idx / rowsPerCol;
+        const int row = idx % rowsPerCol;
+        const double bx = kX0 + 24 + col * (colW + colGap);
+        const double by = listY + row * rowStep;
+
+        const bool isCur = !isDonePending && r.step == curStep;
+        const bool isPrev = !isDonePending && r.step == curStep - 1 && curStep > 1;
+        const bool isNext = !isDonePending && r.step == curStep + 1;
+        const bool prominent = isCur || isPrev || isNext;
+
+        std::string stTag = r.state;
+        if (isCur && sp.state == "interrupted") stTag = "interrupted";
+        const Color stColor = stTag == "done" ? cGreen
+                            : stTag == "failed" || stTag == "interrupted" ? cRed
+                            : stTag == "waiting" ? cAmber
+                            : stTag == "running" ? cAccent
+                            : isNext ? cText : cDim;
+
+        const Color bg = isCur ? ((stTag == "failed" || stTag == "interrupted") ? cRedTint : cAccentTint)
+                         : prominent ? cCtl : blendColor(cCard, cBg, 0.35);
+        pen.color(bg);
+        pen.roundedRect(bx, by, colW, boxH, 8);
+        cairo_fill(pen.cr);
+
+        if (isCur) {
+            pen.color(stTag == "failed" || stTag == "interrupted" ? cRed : stTag == "waiting" ? cAmber : cAccent);
+            cairo_set_line_width(pen.cr, 2);
+            pen.roundedRect(bx + 1, by + 1, colW - 2, boxH - 2, 8);
+            cairo_stroke(pen.cr);
+        } else if (prominent) {
+            pen.color(cLine);
+            cairo_set_line_width(pen.cr, 1);
+            pen.roundedRect(bx + 0.5, by + 0.5, colW - 1, boxH - 1, 8);
+            cairo_stroke(pen.cr);
+        }
+
+        // step number badge
+        const double badgeS = 26;
+        const double badgeY = by + (boxH - badgeS) / 2;
+        const bool filledBadge = stTag == "done" || stTag == "failed" || stTag == "interrupted" || stTag == "waiting" ||
+                                 stTag == "running";
+        pen.color(filledBadge ? stColor : (isNext ? cCtlHot : cCtl));
+        pen.roundedRect(bx + 10, badgeY, badgeS, badgeS, 6);
+        cairo_fill(pen.cr);
+        const std::string numStr = std::to_string(r.step);
+        const double nw = pen.measure(numStr, 14, true);
+        pen.text(bx + 10 + (badgeS - nw) / 2, badgeY + 18, numStr, 14, filledBadge ? cOnAccent : (isNext ? cText : cMuted),
+                 true);
+
+        // right state tag
+        std::string badgeText;
+        if (stTag == "done") badgeText = isPrev ? tr("PREV", "前") : tr("DONE", "完了");
+        else if (stTag == "running") badgeText = tr("NOW", "実行中");
+        else if (stTag == "waiting") badgeText = tr("WAIT", "待機中");
+        else if (stTag == "failed") badgeText = tr("FAIL", "失敗");
+        else if (stTag == "interrupted") badgeText = tr("STOP", "中断");
+        else if (stTag == "skipped") badgeText = tr("SKIP", "スキップ");
+        else badgeText = isNext ? tr("NEXT", "次") : "";
+
+        const double tagW = badgeText.empty() ? 0 : pen.measure(badgeText, 12, true) + 12;
+        if (!badgeText.empty())
+            pen.text(bx + colW - 12, by + (r.note.empty() ? boxH / 2 + 5 : 22), badgeText, 12,
+                     isNext && stTag == "pending" ? cAccent : stColor, true, true);
+
+        const double titleX = bx + 46;
+        const double titleMaxW = colW - 46 - tagW - 14;
+        const std::string stepName = localizedStepTitle(r.step, r.title, ja_);
+        const Color titleC = isCur || isPrev || stTag == "done" ? cText : isNext ? cText : cMuted;
+        const double titleY = r.note.empty() ? by + boxH / 2 + 5 : by + 23;
+        pen.text(titleX, titleY, ellipsize(pen, stepName, 15, prominent, titleMaxW, false), 15, titleC, prominent);
+
+        if (!r.note.empty()) {
+            const Color noteC = (stTag == "failed" || stTag == "interrupted") ? cRed : cMuted;
+            pen.text(titleX, by + 42, ellipsize(pen, r.note, 13, false, colW - 58, false), 13, noteC);
+        }
+    }
 }
 
 void PanelUi::drawEnvironment(const Pen& pen, const Snapshot& s) {
@@ -721,6 +1034,10 @@ void PanelUi::activate(const std::string& id) {
         }
     }
     else if (id == "refresh") model_.refresh();
+    else if (id == "setup:reopen") {
+        model_.reopen();
+        return;
+    }
     model_.setFullChecks(view_ == View::Environment);
     if (id.rfind("set:", 0) == 0) {  // settings: shown at once, applied together once the taps settle
         const std::string list = id.substr(4);
@@ -748,11 +1065,14 @@ void PanelUi::activate(const std::string& id) {
         from = sp + 1;
     }
     model_.run(args);
-    // long, many-step ones: show their output as it comes
-    if (args[0] == "setup" || args[0] == "community" || args[0] == "official" || args[0] == "update" || args[0] == "uninstall" ||
-        args[0] == "install-deps" || args[0] == "swap") {
+    // Setup stays on (or switches to) the Install wizard; other long commands open the Log page.
+    if (args[0] == "setup" || args[0] == "community" || args[0] == "install-deps") {
+        view_ = View::Install;
+        model_.setFullChecks(false);
+    } else if (args[0] == "official" || args[0] == "update" || args[0] == "uninstall" || args[0] == "swap") {
         view_ = View::Log;
         logOffset_ = 0;
+        model_.setFullChecks(false);
     }
 }
 

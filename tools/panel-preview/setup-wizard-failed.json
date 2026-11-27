@@ -1,0 +1,25 @@
+{
+  "active": true,
+  "op": "setup",
+  "state": "failed",
+  "step": 5,
+  "total": 8,
+  "title": "Get and verify packages",
+  "sub": "fex-eac-2610.3-45-g6effd23-steamframe-aarch64.tar.gz",
+  "reason": "SHA-256 verification failed for fex-eac-2610.3-45-g6effd23-steamframe-aarch64.tar.gz",
+  "app_id": "",
+  "download": false,
+  "actions": ["retry", "log"],
+  "game_pending": false,
+  "alive": false,
+  "results": [
+    {"step": 1, "title": "Check Steam and VRChat", "state": "done", "note": ""},
+    {"step": 2, "title": "Install FEX-Emu", "state": "done", "note": ""},
+    {"step": 3, "title": "Install Proton Experimental", "state": "done", "note": ""},
+    {"step": 4, "title": "Install Proton EasyAntiCheat Runtime", "state": "done", "note": ""},
+    {"step": 5, "title": "Get and verify packages", "state": "failed", "note": "checksum mismatch"},
+    {"step": 6, "title": "Deploy the PCVR runtime", "state": "pending", "note": ""},
+    {"step": 7, "title": "Let Steam see Proton", "state": "pending", "note": ""},
+    {"step": 8, "title": "Apply and verify VRChat settings", "state": "pending", "note": ""}
+  ]
+}

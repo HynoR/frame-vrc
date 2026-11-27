@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Turn frame-vrc's private FEX copy into ji10me's tested VRChat runtime (SteamFrame_Standalone_PCVR_VRChat 0.3.6,
+"""Turn frame-vrc's private FEX copy into ji10me's tested VRChat runtime (SteamFrame_Standalone_PCVR_VRChat 0.3.7,
 installer/frame_setup.py prepare_runtime; MIT, Copyright (c) 2026 JITOME, see lib/ji10me/LICENSE).
 
   fex-runtime.py FEX_DIR CONFIG_DIR VIDEO_DIR GAZE_FILE ADAPTER_C FINAL_DIR
@@ -22,7 +22,7 @@ SYSROOT = "/usr/share/guestos/fex-mesa"
 HOST = "usr/lib/aarch64-linux-gnu/fex-emu/HostThunks/libvulkan-host.so"
 GUEST_DIR = "usr/share/fex-emu/GuestThunks"
 DB = "usr/share/fex-emu/ThunksDB.json"
-# ji10me 0.3.6 compatibility.json: Valve's FEX-Emu FEX-2607-76-g37265b1
+# ji10me 0.3.6 and 0.3.7 compatibility.json (unchanged): Valve's FEX-Emu FEX-2607-76-g37265b1
 TESTED = {HOST: "127f9c354be74861", GUEST_DIR + "/libvulkan-guest.so": "46333327f3ca54df", DB: "a0be4a09185abf61"}
 
 

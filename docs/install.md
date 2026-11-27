@@ -27,18 +27,22 @@ Files are installed to `~/.local/lib/frame-vrc` and symlinked to `~/.local/bin/f
 
 ## What `setup` Does
 
-Running `frame-vrc setup` (or tapping **Setup to PCVR Version** in the panel) performs the following steps:
+Running `frame-vrc setup` (or tapping **Setup to PCVR Version** in the panel) runs an 8-step guided wizard. If interrupted or stopped on an error, re-running `frame-vrc setup` (or tapping **Retry This Step**) resumes from the first unfinished step:
 
-1. **Verifies Steam Dependencies**: Checks for FEX-Emu, Proton Experimental, and Proton EasyAntiCheat Runtime, opening Steam's install prompt for any missing components.
-2. **Downloads & Verifies Runtime Packages**: Downloads the patched FEX build, DFR DXVK, H.264 video plugin, and Wine audio fix from GitHub Releases, verifying each package against its SHA-256 checksum.
-3. **Configures Private FEX Environment**: Sets up ji10me's runtime inside a private FEX directory (`~/.local/share/frame-vrc/fex`) scoped only to VRChat, and compiles the session supervisor and eye-tracking bridge.
-4. **Creates Standalone Proton Tool**: Creates `Proton Experimental (Ji10me PCVR Edit)`—a copy of Proton Experimental patched with DFR DXVK—at `~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr` (~1.5 GB). On first run, Steam restarts once to register the new compatibility tool.
-5. **Configures VRChat in Steam**: Selects the custom Proton tool for VRChat, sets the default per-eye render resolution to `1920`, and configures launch options to `frame-vrc-run %command%`.
+1. **Check Steam and VRChat**: Verifies Steam is responding and VRChat is in your library (prompts to add it if missing, or asks you to exit if running).
+2. **Install FEX-Emu**: Checks FEX-Emu (`3127680`) and opens Steam's install prompt if missing, waiting for confirmation and completion.
+3. **Install Proton Experimental**: Checks Proton Experimental (`1493710`), opening its Steam install prompt only after the previous tool is ready.
+4. **Install Proton EasyAntiCheat Runtime**: Checks Proton EasyAntiCheat Runtime (`1826330`) using the same one-prompt-at-a-time flow.
+5. **Get & Verify Packages**: Downloads (or uses custom local files for) the patched FEX build, DFR DXVK, H.264 video plugin, and Wine audio fix, verifying each SHA-256 checksum.
+6. **Deploy the PCVR Runtime**: Compiles ji10me's session supervisor and eye-tracking bridge, deploys the private VRChat-only FEX environment (`~/.local/share/frame-vrc/fex`), and creates `Proton Experimental (Ji10me PCVR Edit)` at `~/.local/share/Steam/compatibilitytools.d/frame-vrc-dfr` (~1.5 GB).
+7. **Let Steam See Proton**: Checks if Steam lists the new Proton copy; if not yet registered, restarts Steam once (the dashboard briefly disappears) and verifies again.
+8. **Apply & Verify VRChat Settings**: Sets VRChat's compatibility tool, default per-eye render resolution (`1920`), and launch options (`frame-vrc-run %command%`), and notes if VRChat itself still needs an install or update in Steam.
 
 ## CLI Reference
 
 ```text
-frame-vrc setup                  Configure and switch VRChat to the PCVR build
+frame-vrc setup                  Configure and switch VRChat to the PCVR build (resumes if unfinished)
+frame-vrc install-deps           Install only the Steam dependencies (steps 1–4)
 frame-vrc official               Revert VRChat to the official Android build
 frame-vrc status                 Show current version and component status
 frame-vrc doctor                 Run environment health checks (prints "all set" when healthy)
